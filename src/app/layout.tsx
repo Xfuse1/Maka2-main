@@ -15,6 +15,7 @@ const cairo = Cairo({
   display: "swap",
   preload: true,
   fallback: ["system-ui", "arial"],
+  adjustFontFallback: true,
 })
 
 export const viewport: Viewport = {
@@ -30,6 +31,10 @@ export async function generateMetadata(): Promise<Metadata> {
     title: settings?.store_name || "مكة - متجر الأزياء النسائية الراقية",
     description: settings?.store_description || "اكتشفي مجموعتنا الحصرية من العبايات والكارديجان والبدل والفساتين",
     generator: "v0.app",
+    // Performance hints
+    other: {
+      'dns-prefetch': '//tpkfgimtgduiiiscdqyq.supabase.co',
+    },
   }
 }
 
@@ -43,15 +48,22 @@ export default async function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <head>
+        {/* DNS Prefetch for faster connections */}
+        <link rel="dns-prefetch" href="https://tpkfgimtgduiiiscdqyq.supabase.co" />
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+        
+        {/* Preconnect for critical resources */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://tpkfgimtgduiiiscdqyq.supabase.co" />
       </head>
       <body className={`font-sans ${cairo.variable} antialiased text-foreground bg-background`}>
         <WebVitals />
         <DesignProvider />
         <DesignSyncProvider>
           <StoreInitializer settings={settings} />
-          <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>{children}</Suspense>
         </DesignSyncProvider>
       </body>
     </html>

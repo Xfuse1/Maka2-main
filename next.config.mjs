@@ -6,12 +6,17 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Performance optimizations
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'date-fns'],
+  },
   images: {
     unoptimized: false,
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 3600,
+    minimumCacheTTL: 31536000, // 1 year cache
 
     // ⚠️ SECURITY WARNING: SVG files can contain malicious JavaScript
     // dangerouslyAllowSVG is enabled to support SVG images in the app.
@@ -57,6 +62,18 @@ const nextConfig = {
   compress: true,
   reactStrictMode: true,
   poweredByHeader: false,
+  // Bundle optimization
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{member}}',
+    },
+  },
+  // Output optimization
+  output: 'standalone',
+  // Compiler optimizations
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
 }
 
 // Security headers: add a Content-Security-Policy to prevent unexpected
