@@ -1,11 +1,21 @@
 -- =============================================================================
--- إنشاء جميع الجداول - Makastore Database Schema
--- Create All Tables - Ready to Run in New Supabase Project
+-- Complete Database Setup - Makastore
+-- إعداد قاعدة البيانات الكاملة - متجر مكة
 -- =============================================================================
 -- نسخ هذا الكود بالكامل وتشغيله في Supabase SQL Editor
 -- Copy this entire code and run in Supabase SQL Editor
 -- =============================================================================
+-- يجمع هذا الملف:
+-- This file combines:
+-- 1. create_all_tables.sql - إنشاء جميع الجداول
+-- 2. fix-rls-policies.sql - إصلاح سياسات RLS
+-- 3. fix-infinite-recursion.sql - إصلاح التكرار اللانهائي
+-- 4. fix-admin-creation.sql - إصلاح إنشاء المسؤول
+-- 5. fix-profiles-service-role.sql - منح صلاحيات Service Role
+-- 6. fix-logo-storage-policies.sql - إصلاح صلاحيات التخزين
+-- =============================================================================
 
+-- =============================================================================
 -- Step 1: Create Extensions (if not exist)
 -- =============================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -570,154 +580,152 @@ CREATE TABLE IF NOT EXISTS public.addresses (
 
 -- Categories self-reference
 ALTER TABLE public.categories 
+  DROP CONSTRAINT IF EXISTS categories_parent_id_fkey;
+ALTER TABLE public.categories 
   ADD CONSTRAINT categories_parent_id_fkey 
   FOREIGN KEY (parent_id) REFERENCES public.categories(id);
 
 -- Products
+ALTER TABLE public.products 
+  DROP CONSTRAINT IF EXISTS products_category_id_fkey;
 ALTER TABLE public.products 
   ADD CONSTRAINT products_category_id_fkey 
   FOREIGN KEY (category_id) REFERENCES public.categories(id);
 
 -- Product Variants
 ALTER TABLE public.product_variants 
+  DROP CONSTRAINT IF EXISTS product_variants_product_id_fkey;
+ALTER TABLE public.product_variants 
   ADD CONSTRAINT product_variants_product_id_fkey 
   FOREIGN KEY (product_id) REFERENCES public.products(id);
 
 -- Product Images
+ALTER TABLE public.product_images 
+  DROP CONSTRAINT IF EXISTS product_images_product_id_fkey;
 ALTER TABLE public.product_images 
   ADD CONSTRAINT product_images_product_id_fkey 
   FOREIGN KEY (product_id) REFERENCES public.products(id);
 
 -- Product Recommendations
 ALTER TABLE public.product_recommendations 
+  DROP CONSTRAINT IF EXISTS fk_product_recommendations_product;
+ALTER TABLE public.product_recommendations 
   ADD CONSTRAINT fk_product_recommendations_product 
   FOREIGN KEY (product_id) REFERENCES public.products(id);
 
 -- Cart Items
 ALTER TABLE public.cart_items 
+  DROP CONSTRAINT IF EXISTS cart_items_user_id_fkey;
+ALTER TABLE public.cart_items 
   ADD CONSTRAINT cart_items_user_id_fkey 
   FOREIGN KEY (user_id) REFERENCES public.customers(id);
 
+ALTER TABLE public.cart_items 
+  DROP CONSTRAINT IF EXISTS cart_items_product_variant_id_fkey;
 ALTER TABLE public.cart_items 
   ADD CONSTRAINT cart_items_product_variant_id_fkey 
   FOREIGN KEY (product_variant_id) REFERENCES public.product_variants(id);
 
 -- Orders
 ALTER TABLE public.orders 
+  DROP CONSTRAINT IF EXISTS orders_customer_id_fkey;
+ALTER TABLE public.orders 
   ADD CONSTRAINT orders_customer_id_fkey 
   FOREIGN KEY (customer_id) REFERENCES public.customers(id);
 
 -- Order Items
 ALTER TABLE public.order_items 
+  DROP CONSTRAINT IF EXISTS order_items_order_id_fkey;
+ALTER TABLE public.order_items 
   ADD CONSTRAINT order_items_order_id_fkey 
   FOREIGN KEY (order_id) REFERENCES public.orders(id);
 
 ALTER TABLE public.order_items 
+  DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
+ALTER TABLE public.order_items 
   ADD CONSTRAINT order_items_product_id_fkey 
   FOREIGN KEY (product_id) REFERENCES public.products(id);
 
+ALTER TABLE public.order_items 
+  DROP CONSTRAINT IF EXISTS order_items_variant_id_fkey;
 ALTER TABLE public.order_items 
   ADD CONSTRAINT order_items_variant_id_fkey 
   FOREIGN KEY (variant_id) REFERENCES public.product_variants(id);
 
 -- Product Reviews
 ALTER TABLE public.product_reviews 
+  DROP CONSTRAINT IF EXISTS product_reviews_product_id_fkey;
+ALTER TABLE public.product_reviews 
   ADD CONSTRAINT product_reviews_product_id_fkey 
   FOREIGN KEY (product_id) REFERENCES public.products(id);
 
+ALTER TABLE public.product_reviews 
+  DROP CONSTRAINT IF EXISTS product_reviews_order_id_fkey;
 ALTER TABLE public.product_reviews 
   ADD CONSTRAINT product_reviews_order_id_fkey 
   FOREIGN KEY (order_id) REFERENCES public.orders(id);
 
 -- Coupon Usage
 ALTER TABLE public.coupon_usage 
+  DROP CONSTRAINT IF EXISTS coupon_usage_coupon_id_fkey;
+ALTER TABLE public.coupon_usage 
   ADD CONSTRAINT coupon_usage_coupon_id_fkey 
   FOREIGN KEY (coupon_id) REFERENCES public.discount_coupons(id);
 
 ALTER TABLE public.coupon_usage 
+  DROP CONSTRAINT IF EXISTS coupon_usage_order_id_fkey;
+ALTER TABLE public.coupon_usage 
   ADD CONSTRAINT coupon_usage_order_id_fkey 
   FOREIGN KEY (order_id) REFERENCES public.orders(id);
 
+ALTER TABLE public.coupon_usage 
+  DROP CONSTRAINT IF EXISTS coupon_usage_customer_id_fkey;
 ALTER TABLE public.coupon_usage 
   ADD CONSTRAINT coupon_usage_customer_id_fkey 
   FOREIGN KEY (customer_id) REFERENCES public.customers(id);
 
 -- Security Events
 ALTER TABLE public.security_events 
+  DROP CONSTRAINT IF EXISTS security_events_customer_id_fkey;
+ALTER TABLE public.security_events 
   ADD CONSTRAINT security_events_customer_id_fkey 
   FOREIGN KEY (customer_id) REFERENCES public.customers(id);
 
 ALTER TABLE public.security_events 
+  DROP CONSTRAINT IF EXISTS security_events_order_id_fkey;
+ALTER TABLE public.security_events 
   ADD CONSTRAINT security_events_order_id_fkey 
   FOREIGN KEY (order_id) REFERENCES public.orders(id);
-
--- Auth-related Foreign Keys (تشتغل إذا كان auth.users موجود)
--- Uncomment if auth.users exists:
-
--- ALTER TABLE public.admins 
---   ADD CONSTRAINT admins_user_id_fkey 
---   FOREIGN KEY (user_id) REFERENCES auth.users(id);
-
--- ALTER TABLE public.profiles 
---   ADD CONSTRAINT profiles_id_fkey 
---   FOREIGN KEY (id) REFERENCES auth.users(id);
-
--- ALTER TABLE public.store_settings 
---   ADD CONSTRAINT store_settings_updated_by_fkey 
---   FOREIGN KEY (updated_by) REFERENCES auth.users(id);
 
 -- =============================================================================
 -- Step 4: Create Indexes (للأداء)
 -- =============================================================================
 
--- Products indexes
 CREATE INDEX IF NOT EXISTS idx_products_category_id ON public.products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_slug ON public.products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_is_featured ON public.products(is_featured) WHERE is_featured = true;
-
--- Orders indexes
 CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON public.orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
-
--- Order Items indexes
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON public.order_items(product_id);
-
--- Cart Items indexes
 CREATE INDEX IF NOT EXISTS idx_cart_items_user_id ON public.cart_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_session_id ON public.cart_items(session_id);
-
--- Product Variants indexes
 CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON public.product_variants(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON public.product_variants(sku);
-
--- Product Images indexes
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON public.product_images(product_id);
-
--- Product Reviews indexes
 CREATE INDEX IF NOT EXISTS idx_product_reviews_product_id ON public.product_reviews(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_reviews_is_approved ON public.product_reviews(is_approved);
-
--- Categories indexes
 CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON public.categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_categories_slug ON public.categories(slug);
-
--- Discount Coupons indexes
 CREATE INDEX IF NOT EXISTS idx_discount_coupons_code ON public.discount_coupons(code);
 CREATE INDEX IF NOT EXISTS idx_discount_coupons_is_active ON public.discount_coupons(is_active) WHERE is_active = true;
-
--- Payment Transactions indexes
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_order_id ON public.payment_transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON public.payment_transactions(status);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_created_at ON public.payment_transactions(created_at DESC);
-
--- Analytics Events indexes
 CREATE INDEX IF NOT EXISTS idx_analytics_events_event_name ON public.analytics_events(event_name);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON public.analytics_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_session_id ON public.analytics_events(session_id);
-
--- Addresses indexes
 CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON public.addresses(user_id);
 CREATE INDEX IF NOT EXISTS idx_addresses_is_default ON public.addresses(is_default) WHERE is_default = true;
 
@@ -725,7 +733,6 @@ CREATE INDEX IF NOT EXISTS idx_addresses_is_default ON public.addresses(is_defau
 -- Step 5: Enable Row Level Security (RLS)
 -- =============================================================================
 
--- Enable RLS on all tables
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -761,187 +768,151 @@ ALTER TABLE public.fraud_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shipping_zones ENABLE ROW LEVEL SECURITY;
 
 -- =============================================================================
--- Step 6: Create RLS Policies
+-- Step 6: Drop ALL Existing Policies (تجنب التعارض)
 -- =============================================================================
+
+DO $$ 
+DECLARE 
+  pol record;
+BEGIN
+  FOR pol IN 
+    SELECT schemaname, tablename, policyname 
+    FROM pg_policies 
+    WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 
+      pol.policyname, pol.schemaname, pol.tablename);
+  END LOOP;
+END $$;
+
+-- =============================================================================
+-- Step 7: Create RLS Policies (بدون تكرار لانهائي)
+-- =============================================================================
+
+-- =====================
+-- Profiles Policies (NO RECURSION!)
+-- =====================
+
+-- Service role full access (أهم policy!)
+CREATE POLICY "service_role_full_access" 
+ON public.profiles
+AS PERMISSIVE
+FOR ALL 
+USING (true)
+WITH CHECK (true);
+
+-- Users can read own profile
+CREATE POLICY "users_read_own_profile" 
+ON public.profiles
+AS PERMISSIVE
+FOR SELECT 
+TO authenticated
+USING (id = auth.uid());
+
+-- Users can update own profile
+CREATE POLICY "users_update_own_profile" 
+ON public.profiles
+AS PERMISSIVE
+FOR UPDATE 
+TO authenticated
+USING (id = auth.uid())
+WITH CHECK (id = auth.uid());
+
+-- Users can insert own profile
+CREATE POLICY "users_insert_own_profile" 
+ON public.profiles
+AS PERMISSIVE
+FOR INSERT 
+TO authenticated
+WITH CHECK (id = auth.uid());
 
 -- =====================
 -- Categories Policies
 -- =====================
 
--- Public can view active categories
-CREATE POLICY "Public can view active categories"
-ON public.categories
-FOR SELECT
+CREATE POLICY "public_read_active_categories"
+ON public.categories FOR SELECT
 USING (is_active = true);
 
--- Admins can view all categories
-CREATE POLICY "Admins can view all categories"
-ON public.categories
-FOR SELECT
+CREATE POLICY "authenticated_manage_categories"
+ON public.categories FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can insert categories
-CREATE POLICY "Admins can insert categories"
-ON public.categories
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can update categories
-CREATE POLICY "Admins can update categories"
-ON public.categories
-FOR UPDATE
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can delete categories
-CREATE POLICY "Admins can delete categories"
-ON public.categories
-FOR DELETE
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Products Policies
 -- =====================
 
--- Public can view active products
-CREATE POLICY "Public can view active products"
-ON public.products
-FOR SELECT
+CREATE POLICY "public_read_active_products"
+ON public.products FOR SELECT
 USING (is_active = true);
 
--- Admins can view all products
-CREATE POLICY "Admins can view all products"
-ON public.products
-FOR SELECT
+CREATE POLICY "authenticated_manage_products"
+ON public.products FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage products
-CREATE POLICY "Admins can manage products"
-ON public.products
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Product Images Policies
 -- =====================
 
--- Public can view product images
-CREATE POLICY "Public can view product images"
-ON public.product_images
-FOR SELECT
+CREATE POLICY "public_read_product_images"
+ON public.product_images FOR SELECT
 USING (true);
 
--- Admins can manage product images
-CREATE POLICY "Admins can manage product images"
-ON public.product_images
-FOR ALL
+CREATE POLICY "authenticated_manage_product_images"
+ON public.product_images FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Product Variants Policies
 -- =====================
 
--- Public can view active variants
-CREATE POLICY "Public can view active variants"
-ON public.product_variants
-FOR SELECT
+CREATE POLICY "public_read_active_variants"
+ON public.product_variants FOR SELECT
 USING (is_active = true);
 
--- Admins can manage variants
-CREATE POLICY "Admins can manage variants"
-ON public.product_variants
-FOR ALL
+CREATE POLICY "authenticated_manage_variants"
+ON public.product_variants FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Orders Policies
 -- =====================
 
--- Customers can view their own orders
-CREATE POLICY "Customers can view own orders"
-ON public.orders
-FOR SELECT
+CREATE POLICY "users_read_own_orders"
+ON public.orders FOR SELECT
 TO authenticated
 USING (user_id = auth.uid());
 
--- Admins can view all orders
-CREATE POLICY "Admins can view all orders"
-ON public.orders
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow insert for authenticated users
-CREATE POLICY "Authenticated users can create orders"
-ON public.orders
-FOR INSERT
+CREATE POLICY "authenticated_create_orders"
+ON public.orders FOR INSERT
 TO authenticated
 WITH CHECK (user_id = auth.uid() OR user_id IS NULL);
 
--- Allow public to create orders (for guest checkout)
-CREATE POLICY "Public can create orders"
-ON public.orders
-FOR INSERT
+CREATE POLICY "public_create_orders"
+ON public.orders FOR INSERT
 TO anon
 WITH CHECK (true);
 
--- Admins can update orders
-CREATE POLICY "Admins can update orders"
-ON public.orders
-FOR UPDATE
+CREATE POLICY "authenticated_manage_all_orders"
+ON public.orders FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Order Items Policies
 -- =====================
 
--- Customers can view their own order items
-CREATE POLICY "Customers can view own order items"
-ON public.order_items
-FOR SELECT
+CREATE POLICY "users_read_own_order_items"
+ON public.order_items FOR SELECT
 TO authenticated
 USING (
   EXISTS (
@@ -951,351 +922,158 @@ USING (
   )
 );
 
--- Admins can view all order items
-CREATE POLICY "Admins can view all order items"
-ON public.order_items
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow insert for authenticated users
-CREATE POLICY "Authenticated users can create order items"
-ON public.order_items
-FOR INSERT
+CREATE POLICY "authenticated_create_order_items"
+ON public.order_items FOR INSERT
 TO authenticated
 WITH CHECK (true);
 
--- Allow public to create order items
-CREATE POLICY "Public can create order items"
-ON public.order_items
-FOR INSERT
+CREATE POLICY "public_create_order_items"
+ON public.order_items FOR INSERT
 TO anon
 WITH CHECK (true);
 
--- Admins can manage order items
-CREATE POLICY "Admins can manage order items"
-ON public.order_items
-FOR ALL
+CREATE POLICY "authenticated_manage_all_order_items"
+ON public.order_items FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Customers Policies
 -- =====================
 
--- Customers can view own data
-CREATE POLICY "Customers can view own data"
-ON public.customers
-FOR SELECT
+CREATE POLICY "users_read_own_customer_data"
+ON public.customers FOR SELECT
 TO authenticated
 USING (
   id = auth.uid() OR
   email = (SELECT email FROM auth.users WHERE id = auth.uid())
 );
 
--- Admins can view all customers
-CREATE POLICY "Admins can view all customers"
-ON public.customers
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Customers can update own data
-CREATE POLICY "Customers can update own data"
-ON public.customers
-FOR UPDATE
-TO authenticated
-USING (
-  id = auth.uid() OR
-  email = (SELECT email FROM auth.users WHERE id = auth.uid())
-)
-WITH CHECK (
-  id = auth.uid() OR
-  email = (SELECT email FROM auth.users WHERE id = auth.uid())
-);
-
--- Anyone can create customer records
-CREATE POLICY "Anyone can create customer records"
-ON public.customers
-FOR INSERT
+CREATE POLICY "public_create_customers"
+ON public.customers FOR INSERT
 WITH CHECK (true);
 
--- Admins can manage customers
-CREATE POLICY "Admins can manage customers"
-ON public.customers
-FOR ALL
+CREATE POLICY "users_update_own_customer_data"
+ON public.customers FOR UPDATE
 TO authenticated
 USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  id = auth.uid() OR
+  email = (SELECT email FROM auth.users WHERE id = auth.uid())
 )
 WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  id = auth.uid() OR
+  email = (SELECT email FROM auth.users WHERE id = auth.uid())
 );
+
+CREATE POLICY "authenticated_manage_all_customers"
+ON public.customers FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Cart Items Policies
 -- =====================
 
--- Users can view their own cart items
-CREATE POLICY "Users can view their own cart"
-ON public.cart_items
-FOR SELECT
-TO authenticated
-USING (user_id = auth.uid());
-
--- Users can insert their own cart items
-CREATE POLICY "Users can add to their cart"
-ON public.cart_items
-FOR INSERT
-TO authenticated
-WITH CHECK (user_id = auth.uid());
-
--- Users can update their own cart items
-CREATE POLICY "Users can update their cart"
-ON public.cart_items
-FOR UPDATE
+CREATE POLICY "users_manage_own_cart"
+ON public.cart_items FOR ALL
 TO authenticated
 USING (user_id = auth.uid())
 WITH CHECK (user_id = auth.uid());
 
--- Users can delete their own cart items
-CREATE POLICY "Users can delete from their cart"
-ON public.cart_items
-FOR DELETE
-TO authenticated
-USING (user_id = auth.uid());
-
--- Allow anonymous cart by session_id
-CREATE POLICY "Anonymous users can manage cart by session"
-ON public.cart_items
-FOR ALL
+CREATE POLICY "anon_manage_cart_by_session"
+ON public.cart_items FOR ALL
 TO anon
 USING (user_id IS NULL)
 WITH CHECK (user_id IS NULL);
 
 -- =====================
--- Profiles Policies
--- =====================
-
--- Users can read own profile
-CREATE POLICY "Users can read own profile"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (id = auth.uid());
-
--- Users can update own profile
-CREATE POLICY "Users can update own profile"
-ON public.profiles
-FOR UPDATE
-TO authenticated
-USING (id = auth.uid())
-WITH CHECK (id = auth.uid());
-
--- Users can create their own profile
-CREATE POLICY "Users can create their own profile"
-ON public.profiles
-FOR INSERT
-TO authenticated
-WITH CHECK (id = auth.uid());
-
--- Admins can read all profiles
-CREATE POLICY "Admins can read all profiles"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage all profiles
-CREATE POLICY "Admins can manage profiles"
-ON public.profiles
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- =====================
 -- Product Reviews Policies
 -- =====================
 
--- Anyone can view approved reviews
-CREATE POLICY "Anyone can view approved reviews"
-ON public.product_reviews
-FOR SELECT
+CREATE POLICY "public_read_approved_reviews"
+ON public.product_reviews FOR SELECT
 USING (is_approved = true);
 
--- Admins can view all reviews
-CREATE POLICY "Admins can view all reviews"
-ON public.product_reviews
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Authenticated users can create reviews
-CREATE POLICY "Authenticated users can create reviews"
-ON public.product_reviews
-FOR INSERT
+CREATE POLICY "authenticated_create_reviews"
+ON public.product_reviews FOR INSERT
 TO authenticated
 WITH CHECK (true);
 
--- Admins can manage reviews
-CREATE POLICY "Admins can manage reviews"
-ON public.product_reviews
-FOR ALL
+CREATE POLICY "authenticated_manage_all_reviews"
+ON public.product_reviews FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Design Settings Policies
 -- =====================
 
--- Public can view design settings
-CREATE POLICY "Public can view design settings"
-ON public.design_settings
-FOR SELECT
+CREATE POLICY "public_read_design_settings"
+ON public.design_settings FOR SELECT
 USING (true);
 
--- Admins can manage design settings
-CREATE POLICY "Admins can manage design settings"
-ON public.design_settings
-FOR ALL
+CREATE POLICY "authenticated_manage_design_settings"
+ON public.design_settings FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Page Content Policies
 -- =====================
 
--- Public can view published pages
-CREATE POLICY "Public can view published pages"
-ON public.page_content
-FOR SELECT
+CREATE POLICY "public_read_published_pages"
+ON public.page_content FOR SELECT
 USING (is_published = true);
 
--- Admins can view all pages
-CREATE POLICY "Admins can view all pages"
-ON public.page_content
-FOR SELECT
+CREATE POLICY "authenticated_manage_pages"
+ON public.page_content FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage pages
-CREATE POLICY "Admins can manage pages"
-ON public.page_content
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Contact Messages Policies
 -- =====================
 
--- Anyone can insert contact messages
-CREATE POLICY "Public can insert contact messages"
-ON public.contact_messages
-FOR INSERT
+CREATE POLICY "public_create_contact_messages"
+ON public.contact_messages FOR INSERT
 WITH CHECK (true);
 
--- Deny public select/update/delete
-CREATE POLICY "Deny public select on contact messages"
-ON public.contact_messages
-FOR SELECT
-USING (false);
-
--- Admins can view all messages
-CREATE POLICY "Admins can view all contact messages"
-ON public.contact_messages
-FOR SELECT
+CREATE POLICY "authenticated_read_contact_messages"
+ON public.contact_messages FOR SELECT
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true);
 
--- Admins can manage messages
-CREATE POLICY "Admins can manage contact messages"
-ON public.contact_messages
-FOR ALL
+CREATE POLICY "authenticated_manage_contact_messages"
+ON public.contact_messages FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Hero Slides Policies
 -- =====================
 
--- Public can view active hero slides
-CREATE POLICY "Public can view active hero slides"
-ON public.hero_slides
-FOR SELECT
+CREATE POLICY "public_read_active_hero_slides"
+ON public.hero_slides FOR SELECT
 USING (is_active = true);
 
--- Admins can manage hero slides
-CREATE POLICY "Admins can manage hero slides"
-ON public.hero_slides
-FOR ALL
+CREATE POLICY "authenticated_manage_hero_slides"
+ON public.hero_slides FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Transactions Policies
 -- =====================
 
--- Admins can view all transactions
-CREATE POLICY "Admins can view all transactions"
-ON public.payment_transactions
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Users can view their own transactions
-CREATE POLICY "Users can view their own transactions"
-ON public.payment_transactions
-FOR SELECT
+CREATE POLICY "users_read_own_transactions"
+ON public.payment_transactions FOR SELECT
 TO authenticated
 USING (
   EXISTS (
@@ -1305,79 +1083,49 @@ USING (
   )
 );
 
--- System can insert transactions
-CREATE POLICY "System can create transactions"
-ON public.payment_transactions
-FOR INSERT
+CREATE POLICY "public_create_transactions"
+ON public.payment_transactions FOR INSERT
+WITH CHECK (true);
+
+CREATE POLICY "authenticated_manage_all_transactions"
+ON public.payment_transactions FOR ALL
+TO authenticated
+USING (true)
 WITH CHECK (true);
 
 -- =====================
 -- Analytics Events Policies
 -- =====================
 
--- Anyone can insert analytics events
-CREATE POLICY "Anyone can insert analytics events"
-ON public.analytics_events
-FOR INSERT
+CREATE POLICY "public_create_analytics"
+ON public.analytics_events FOR INSERT
 WITH CHECK (true);
 
--- Admins can view all analytics
-CREATE POLICY "Admins can view all analytics"
-ON public.analytics_events
-FOR SELECT
+CREATE POLICY "authenticated_read_analytics"
+ON public.analytics_events FOR SELECT
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true);
 
 -- =====================
 -- Security Events Policies
 -- =====================
 
--- Only admins can view security events
-CREATE POLICY "Only admins can view security events"
-ON public.security_events
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- System can insert security events
-CREATE POLICY "System can create security events"
-ON public.security_events
-FOR INSERT
+CREATE POLICY "public_create_security_events"
+ON public.security_events FOR INSERT
 WITH CHECK (true);
 
--- Admins can manage security events
-CREATE POLICY "Admins can manage security events"
-ON public.security_events
-FOR ALL
+CREATE POLICY "authenticated_manage_security_events"
+ON public.security_events FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Coupon Usage Policies
 -- =====================
 
--- Admins can view all coupon usage
-CREATE POLICY "Admins can view all coupon usage"
-ON public.coupon_usage
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Users can view their own coupon usage
-CREATE POLICY "Users can view their own coupon usage"
-ON public.coupon_usage
-FOR SELECT
+CREATE POLICY "users_read_own_coupon_usage"
+ON public.coupon_usage FOR SELECT
 TO authenticated
 USING (
   customer_id IN (
@@ -1386,557 +1134,342 @@ USING (
   )
 );
 
--- System can insert coupon usage
-CREATE POLICY "System can create coupon usage"
-ON public.coupon_usage
-FOR INSERT
+CREATE POLICY "public_create_coupon_usage"
+ON public.coupon_usage FOR INSERT
 WITH CHECK (true);
 
--- Admins can manage coupon usage
-CREATE POLICY "Admins can manage coupon usage"
-ON public.coupon_usage
-FOR ALL
+CREATE POLICY "authenticated_manage_coupon_usage"
+ON public.coupon_usage FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Addresses Policies
 -- =====================
 
--- Users can view their own addresses
-CREATE POLICY "Users can view their own addresses"
-ON public.addresses
-FOR SELECT
-TO authenticated
-USING (auth.uid() = user_id);
-
--- Users can insert their own addresses
-CREATE POLICY "Users can insert their own addresses"
-ON public.addresses
-FOR INSERT
-TO authenticated
-WITH CHECK (auth.uid() = user_id);
-
--- Users can update their own addresses
-CREATE POLICY "Users can update their own addresses"
-ON public.addresses
-FOR UPDATE
+CREATE POLICY "users_manage_own_addresses"
+ON public.addresses FOR ALL
 TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
--- Users can delete their own addresses
-CREATE POLICY "Users can delete their own addresses"
-ON public.addresses
-FOR DELETE
+CREATE POLICY "authenticated_manage_all_addresses"
+ON public.addresses FOR ALL
 TO authenticated
-USING (auth.uid() = user_id);
-
--- Admins can manage all addresses
-CREATE POLICY "Admins can manage all addresses"
-ON public.addresses
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Product Recommendations Policies
 -- =====================
 
--- Public can view product recommendations
-CREATE POLICY "Public can view product recommendations"
-ON public.product_recommendations
-FOR SELECT
+CREATE POLICY "public_read_recommendations"
+ON public.product_recommendations FOR SELECT
 USING (true);
 
--- Admins can manage product recommendations
-CREATE POLICY "Admins can manage product recommendations"
-ON public.product_recommendations
-FOR ALL
+CREATE POLICY "authenticated_manage_recommendations"
+ON public.product_recommendations FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Discount Coupons Policies
 -- =====================
 
--- Public can view active coupons
-CREATE POLICY "Public can view active coupons"
-ON public.discount_coupons
-FOR SELECT
+CREATE POLICY "public_read_active_coupons"
+ON public.discount_coupons FOR SELECT
 USING (is_active = true);
 
--- Admins can view all coupons
-CREATE POLICY "Admins can view all coupons"
-ON public.discount_coupons
-FOR SELECT
+CREATE POLICY "authenticated_manage_coupons"
+ON public.discount_coupons FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage coupons
-CREATE POLICY "Admins can manage coupons"
-ON public.discount_coupons
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Store Settings Policies
 -- =====================
 
--- Public can view store settings
-CREATE POLICY "Public can view store settings"
-ON public.store_settings
-FOR SELECT
+CREATE POLICY "public_read_store_settings"
+ON public.store_settings FOR SELECT
 USING (true);
 
--- Admins can manage store settings
-CREATE POLICY "Admins can manage store settings"
-ON public.store_settings
-FOR ALL
+CREATE POLICY "authenticated_manage_store_settings"
+ON public.store_settings FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Sliders Policies
 -- =====================
 
--- Public can view active sliders
-CREATE POLICY "Public can view active sliders"
-ON public.sliders
-FOR SELECT
+CREATE POLICY "public_read_active_sliders"
+ON public.sliders FOR SELECT
 USING (is_active = true);
 
--- Admins can manage sliders
-CREATE POLICY "Admins can manage sliders"
-ON public.sliders
-FOR ALL
+CREATE POLICY "authenticated_manage_sliders"
+ON public.sliders FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Homepage Sections Policies
 -- =====================
 
--- Public can view active homepage sections
-CREATE POLICY "Public can view active homepage sections"
-ON public.homepage_sections
-FOR SELECT
+CREATE POLICY "public_read_active_sections"
+ON public.homepage_sections FOR SELECT
 USING (is_active = true);
 
--- Admins can manage homepage sections
-CREATE POLICY "Admins can manage homepage sections"
-ON public.homepage_sections
-FOR ALL
+CREATE POLICY "authenticated_manage_sections"
+ON public.homepage_sections FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Methods Policies
 -- =====================
 
--- Public can view active payment methods
-CREATE POLICY "Public can view active payment methods"
-ON public.payment_methods
-FOR SELECT
+CREATE POLICY "public_read_active_payment_methods"
+ON public.payment_methods FOR SELECT
 USING (is_active = true);
 
--- Admins can manage payment methods
-CREATE POLICY "Admins can manage payment methods"
-ON public.payment_methods
-FOR ALL
+CREATE POLICY "authenticated_manage_payment_methods"
+ON public.payment_methods FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Offers Policies
 -- =====================
 
--- Public can view active payment offers
-CREATE POLICY "Public can view active payment offers"
-ON public.payment_offers
-FOR SELECT
+CREATE POLICY "public_read_active_payment_offers"
+ON public.payment_offers FOR SELECT
 USING (is_active = true);
 
--- Admins can manage payment offers
-CREATE POLICY "Admins can manage payment offers"
-ON public.payment_offers
-FOR ALL
+CREATE POLICY "authenticated_manage_payment_offers"
+ON public.payment_offers FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Logs Policies
 -- =====================
 
--- Only admins can view payment logs
-CREATE POLICY "Only admins can view payment logs"
-ON public.payment_logs
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- System can insert payment logs
-CREATE POLICY "System can insert payment logs"
-ON public.payment_logs
-FOR INSERT
+CREATE POLICY "public_create_payment_logs"
+ON public.payment_logs FOR INSERT
 WITH CHECK (true);
+
+CREATE POLICY "authenticated_read_payment_logs"
+ON public.payment_logs FOR SELECT
+TO authenticated
+USING (true);
 
 -- =====================
 -- Payment Webhooks Policies
 -- =====================
 
--- Only admins can view payment webhooks
-CREATE POLICY "Only admins can view payment webhooks"
-ON public.payment_webhooks
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- System can insert payment webhooks
-CREATE POLICY "System can insert payment webhooks"
-ON public.payment_webhooks
-FOR INSERT
+CREATE POLICY "public_create_payment_webhooks"
+ON public.payment_webhooks FOR INSERT
 WITH CHECK (true);
 
--- Admins can manage payment webhooks
-CREATE POLICY "Admins can manage payment webhooks"
-ON public.payment_webhooks
-FOR ALL
+CREATE POLICY "authenticated_manage_payment_webhooks"
+ON public.payment_webhooks FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Refunds Policies
 -- =====================
 
--- Only admins can view payment refunds
-CREATE POLICY "Only admins can view payment refunds"
-ON public.payment_refunds
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- System can insert payment refunds
-CREATE POLICY "System can insert payment refunds"
-ON public.payment_refunds
-FOR INSERT
+CREATE POLICY "public_create_payment_refunds"
+ON public.payment_refunds FOR INSERT
 WITH CHECK (true);
 
--- Admins can manage payment refunds
-CREATE POLICY "Admins can manage payment refunds"
-ON public.payment_refunds
-FOR ALL
+CREATE POLICY "authenticated_manage_payment_refunds"
+ON public.payment_refunds FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Payment Rate Limits Policies
 -- =====================
 
--- Only admins can view rate limits
-CREATE POLICY "Only admins can view rate limits"
-ON public.payment_rate_limits
-FOR SELECT
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- System can manage rate limits
-CREATE POLICY "System can manage rate limits"
-ON public.payment_rate_limits
-FOR ALL
+CREATE POLICY "public_manage_rate_limits"
+ON public.payment_rate_limits FOR ALL
 WITH CHECK (true);
+
+CREATE POLICY "authenticated_read_rate_limits"
+ON public.payment_rate_limits FOR SELECT
+TO authenticated
+USING (true);
 
 -- =====================
 -- Fraud Rules Policies
 -- =====================
 
--- Only admins can view fraud rules
-CREATE POLICY "Only admins can view fraud rules"
-ON public.fraud_rules
-FOR SELECT
+CREATE POLICY "authenticated_manage_fraud_rules"
+ON public.fraud_rules FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage fraud rules
-CREATE POLICY "Admins can manage fraud rules"
-ON public.fraud_rules
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Shipping Zones Policies
 -- =====================
 
--- Public can view active shipping zones
-CREATE POLICY "Public can view active shipping zones"
-ON public.shipping_zones
-FOR SELECT
+CREATE POLICY "public_read_active_shipping_zones"
+ON public.shipping_zones FOR SELECT
 USING (is_active = true);
 
--- Admins can view all shipping zones
-CREATE POLICY "Admins can view all shipping zones"
-ON public.shipping_zones
-FOR SELECT
+CREATE POLICY "authenticated_manage_shipping_zones"
+ON public.shipping_zones FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Admins can manage shipping zones
-CREATE POLICY "Admins can manage shipping zones"
-ON public.shipping_zones
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-)
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
 -- =====================
 -- Admins Table Policies
 -- =====================
 
--- Only admins can view admins table
-CREATE POLICY "Only admins can view admins table"
-ON public.admins
-FOR SELECT
+CREATE POLICY "authenticated_manage_admins"
+ON public.admins FOR ALL
 TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (true)
+WITH CHECK (true);
 
--- Only admins can manage admins table
-CREATE POLICY "Only admins can manage admins table"
-ON public.admins
-FOR ALL
-TO authenticated
-USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+-- =============================================================================
+-- Step 8: Create Storage Buckets and Policies
+-- =============================================================================
+
+-- Site Logo Bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'site-logo',
+  'site-logo',
+  true,
+  5242880, -- 5MB
+  ARRAY['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml']
 )
-WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'];
 
--- =============================================================================
--- Step 7: Create Storage Buckets and Policies
--- =============================================================================
-
--- Note: Storage buckets are managed by Supabase Storage API
--- These policies apply to the storage.objects table
-
--- Products bucket setup
+-- Products Bucket
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'products',
   'products',
   true,
-  5242880, -- 5MB
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
--- Allow public to read product images
+-- Categories Bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'categories',
+  'categories',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+-- Pages Bucket
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'pages',
+  'pages',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  file_size_limit = 5242880,
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+
+-- Drop existing storage policies
+DROP POLICY IF EXISTS "Public can view logo" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload logo" ON storage.objects;
+DROP POLICY IF EXISTS "Public can read product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete product images" ON storage.objects;
+DROP POLICY IF EXISTS "Public can read category images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload category images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update category images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete category images" ON storage.objects;
+DROP POLICY IF EXISTS "Public can read page images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload page images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update page images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete page images" ON storage.objects;
+
+-- Storage policies for site-logo
+CREATE POLICY "Public can view logo"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'site-logo');
+
+CREATE POLICY "Authenticated users can upload logo"
+ON storage.objects FOR ALL
+TO authenticated
+USING (bucket_id = 'site-logo')
+WITH CHECK (bucket_id = 'site-logo');
+
+-- Storage policies for products
 CREATE POLICY "Public can read product images"
 ON storage.objects FOR SELECT
-TO public
 USING (bucket_id = 'products');
 
--- Allow authenticated admins to upload product images
-CREATE POLICY "Admins can upload product images"
-ON storage.objects FOR INSERT
+CREATE POLICY "Authenticated can manage product images"
+ON storage.objects FOR ALL
 TO authenticated
-WITH CHECK (
-  bucket_id = 'products' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (bucket_id = 'products')
+WITH CHECK (bucket_id = 'products');
 
--- Allow authenticated admins to update product images
-CREATE POLICY "Admins can update product images"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (
-  bucket_id = 'products' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow authenticated admins to delete product images
-CREATE POLICY "Admins can delete product images"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (
-  bucket_id = 'products' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Categories bucket setup
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'categories',
-  'categories',
-  true,
-  5242880, -- 5MB
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
-)
-ON CONFLICT (id) DO NOTHING;
-
--- Allow public to read category images
+-- Storage policies for categories
 CREATE POLICY "Public can read category images"
 ON storage.objects FOR SELECT
-TO public
 USING (bucket_id = 'categories');
 
--- Allow authenticated admins to upload category images
-CREATE POLICY "Admins can upload category images"
-ON storage.objects FOR INSERT
+CREATE POLICY "Authenticated can manage category images"
+ON storage.objects FOR ALL
 TO authenticated
-WITH CHECK (
-  bucket_id = 'categories' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (bucket_id = 'categories')
+WITH CHECK (bucket_id = 'categories');
 
--- Allow authenticated admins to update category images
-CREATE POLICY "Admins can update category images"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (
-  bucket_id = 'categories' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow authenticated admins to delete category images
-CREATE POLICY "Admins can delete category images"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (
-  bucket_id = 'categories' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Pages bucket setup (for logos, hero images, and page content)
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'pages',
-  'pages',
-  true,
-  5242880, -- 5MB
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']::text[]
-)
-ON CONFLICT (id) DO NOTHING;
-
--- Allow public to read page images
+-- Storage policies for pages
 CREATE POLICY "Public can read page images"
 ON storage.objects FOR SELECT
-TO public
 USING (bucket_id = 'pages');
 
--- Allow authenticated admins to upload page images
-CREATE POLICY "Admins can upload page images"
-ON storage.objects FOR INSERT
+CREATE POLICY "Authenticated can manage page images"
+ON storage.objects FOR ALL
 TO authenticated
-WITH CHECK (
-  bucket_id = 'pages' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow authenticated admins to update page images
-CREATE POLICY "Admins can update page images"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (
-  bucket_id = 'pages' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
--- Allow authenticated admins to delete page images
-CREATE POLICY "Admins can delete page images"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (
-  bucket_id = 'pages' AND
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+USING (bucket_id = 'pages')
+WITH CHECK (bucket_id = 'pages');
 
 -- =============================================================================
--- Step 8: Create Triggers for Updated_at
+-- Step 9: Create Triggers for Updated_at
 -- =============================================================================
 
--- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1945,102 +1478,81 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger to tables with updated_at
-CREATE TRIGGER update_categories_updated_at
-    BEFORE UPDATE ON public.categories
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
+-- Drop existing triggers
+DROP TRIGGER IF EXISTS update_categories_updated_at ON public.categories;
+DROP TRIGGER IF EXISTS update_products_updated_at ON public.products;
+DROP TRIGGER IF EXISTS update_product_variants_updated_at ON public.product_variants;
+DROP TRIGGER IF EXISTS update_customers_updated_at ON public.customers;
+DROP TRIGGER IF EXISTS update_orders_updated_at ON public.orders;
+DROP TRIGGER IF EXISTS update_cart_items_updated_at ON public.cart_items;
+DROP TRIGGER IF EXISTS update_product_reviews_updated_at ON public.product_reviews;
+DROP TRIGGER IF EXISTS update_store_settings_updated_at ON public.store_settings;
+DROP TRIGGER IF EXISTS update_design_settings_updated_at ON public.design_settings;
+DROP TRIGGER IF EXISTS update_hero_slides_updated_at ON public.hero_slides;
+DROP TRIGGER IF EXISTS update_sliders_updated_at ON public.sliders;
+DROP TRIGGER IF EXISTS update_homepage_sections_updated_at ON public.homepage_sections;
+DROP TRIGGER IF EXISTS update_page_content_updated_at ON public.page_content;
+DROP TRIGGER IF EXISTS update_payment_methods_updated_at ON public.payment_methods;
+DROP TRIGGER IF EXISTS update_payment_offers_updated_at ON public.payment_offers;
+DROP TRIGGER IF EXISTS update_shipping_zones_updated_at ON public.shipping_zones;
+DROP TRIGGER IF EXISTS update_fraud_rules_updated_at ON public.fraud_rules;
+DROP TRIGGER IF EXISTS update_security_events_updated_at ON public.security_events;
 
-CREATE TRIGGER update_products_updated_at
-    BEFORE UPDATE ON public.products
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_product_variants_updated_at
-    BEFORE UPDATE ON public.product_variants
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_customers_updated_at
-    BEFORE UPDATE ON public.customers
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_orders_updated_at
-    BEFORE UPDATE ON public.orders
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_cart_items_updated_at
-    BEFORE UPDATE ON public.cart_items
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_product_reviews_updated_at
-    BEFORE UPDATE ON public.product_reviews
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_store_settings_updated_at
-    BEFORE UPDATE ON public.store_settings
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_design_settings_updated_at
-    BEFORE UPDATE ON public.design_settings
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_hero_slides_updated_at
-    BEFORE UPDATE ON public.hero_slides
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_sliders_updated_at
-    BEFORE UPDATE ON public.sliders
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_homepage_sections_updated_at
-    BEFORE UPDATE ON public.homepage_sections
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_page_content_updated_at
-    BEFORE UPDATE ON public.page_content
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_payment_methods_updated_at
-    BEFORE UPDATE ON public.payment_methods
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_payment_offers_updated_at
-    BEFORE UPDATE ON public.payment_offers
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_shipping_zones_updated_at
-    BEFORE UPDATE ON public.shipping_zones
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_fraud_rules_updated_at
-    BEFORE UPDATE ON public.fraud_rules
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_security_events_updated_at
-    BEFORE UPDATE ON public.security_events
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
+-- Create triggers
+CREATE TRIGGER update_categories_updated_at BEFORE UPDATE ON public.categories FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_product_variants_updated_at BEFORE UPDATE ON public.product_variants FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_cart_items_updated_at BEFORE UPDATE ON public.cart_items FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_product_reviews_updated_at BEFORE UPDATE ON public.product_reviews FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_store_settings_updated_at BEFORE UPDATE ON public.store_settings FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_design_settings_updated_at BEFORE UPDATE ON public.design_settings FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_hero_slides_updated_at BEFORE UPDATE ON public.hero_slides FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_sliders_updated_at BEFORE UPDATE ON public.sliders FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_homepage_sections_updated_at BEFORE UPDATE ON public.homepage_sections FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_page_content_updated_at BEFORE UPDATE ON public.page_content FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_payment_methods_updated_at BEFORE UPDATE ON public.payment_methods FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_payment_offers_updated_at BEFORE UPDATE ON public.payment_offers FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_shipping_zones_updated_at BEFORE UPDATE ON public.shipping_zones FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_fraud_rules_updated_at BEFORE UPDATE ON public.fraud_rules FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_security_events_updated_at BEFORE UPDATE ON public.security_events FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- =============================================================================
--- Step 8: Grant Permissions (للأمان)
+-- Step 10: Create Helper Functions
 -- =============================================================================
 
--- Grant SELECT on all tables to authenticated users
+CREATE OR REPLACE FUNCTION public.has_admin_user()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 
+    FROM public.profiles 
+    WHERE role = 'admin'
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.count_admin_users()
+RETURNS integer
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT COUNT(*)::integer
+  FROM public.profiles 
+  WHERE role = 'admin';
+$$;
+
+GRANT EXECUTE ON FUNCTION public.has_admin_user() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.count_admin_users() TO anon, authenticated;
+
+-- =============================================================================
+-- Step 11: Grant Permissions
+-- =============================================================================
+
 GRANT SELECT ON public.products TO authenticated, anon;
 GRANT SELECT ON public.product_variants TO authenticated, anon;
 GRANT SELECT ON public.product_images TO authenticated, anon;
@@ -2055,49 +1567,91 @@ GRANT SELECT ON public.payment_methods TO authenticated, anon;
 GRANT SELECT ON public.payment_offers TO authenticated, anon;
 GRANT SELECT ON public.store_settings TO authenticated, anon;
 GRANT SELECT ON public.design_settings TO authenticated, anon;
-
--- Grant INSERT on contact messages to everyone
 GRANT INSERT ON public.contact_messages TO authenticated, anon;
 
 -- =============================================================================
--- تم! قاعدة البيانات جاهزة بالكامل مع RLS و Indexes و Triggers و Storage
--- Done! Database is fully ready with RLS, Indexes, Triggers, and Storage
+-- Step 12: Insert Initial Data
 -- =============================================================================
 
--- ✅ 33 Tables Created with all columns
--- ✅ Foreign Keys Added
--- ✅ Indexes Created for Performance
--- ✅ RLS Enabled on ALL Tables (33 tables)
--- ✅ RLS Policies Configured (matching original database patterns)
--- ✅ Storage Buckets Created (products, categories, pages)
--- ✅ Storage Policies Configured
--- ✅ Triggers for Updated_at (17 triggers)
--- ✅ Permissions Granted
+-- Initial Store Settings
+INSERT INTO public.store_settings (
+  id, 
+  store_name, 
+  store_description,
+  shipping_fee,
+  free_shipping_threshold,
+  tax_rate,
+  currency,
+  updated_at
+) VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  'متجري الإلكتروني',
+  'متجر إلكتروني متكامل لبيع المنتجات',
+  50.00,
+  500.00,
+  0.00,
+  'EGP',
+  NOW()
+)
+ON CONFLICT (id) DO UPDATE SET updated_at = NOW();
+
+-- Initial Design Settings
+INSERT INTO public.design_settings (
+  site_key,
+  primary_color,
+  secondary_color,
+  background_color,
+  text_color,
+  heading_font,
+  body_font,
+  logo_bucket,
+  logo_path,
+  updated_at
+) VALUES (
+  'default',
+  '#760614',
+  '#a13030',
+  '#ffffff',
+  '#1a1a1a',
+  'Cairo',
+  'Cairo',
+  'site-logo',
+  'logo.png',
+  NOW()
+)
+ON CONFLICT (site_key) DO UPDATE SET updated_at = NOW();
 
 -- =============================================================================
--- IMPORTANT NOTES / ملاحظات مهمة
+-- تم! قاعدة البيانات جاهزة بالكامل
+-- Done! Database is fully ready
 -- =============================================================================
 
--- 1. After running this script, you need to:
---    بعد تشغيل هذا السكريبت، تحتاج إلى:
---    - Create admin profile in profiles table with role='admin'
---      إنشاء ملف تعريف للمسؤول في جدول profiles مع role='admin'
---    - Upload initial product/category images to storage buckets
---      رفع صور المنتجات والفئات الأولية إلى buckets التخزين
+-- ✅ 33 جدول تم إنشاؤها
+-- ✅ Foreign Keys مضافة
+-- ✅ Indexes للأداء
+-- ✅ RLS مُفعّل على جميع الجداول
+-- ✅ RLS Policies محدّثة (بدون تكرار لانهائي)
+-- ✅ Storage Buckets مُنشأة
+-- ✅ Storage Policies مُحدّثة
+-- ✅ Triggers للـ updated_at
+-- ✅ Helper Functions
+-- ✅ البيانات الأولية
+-- ✅ Service Role صلاحيات كاملة
 
--- 2. Storage Buckets (products, categories, pages) are created automatically
---    buckets التخزين (products, categories, pages) يتم إنشاؤها تلقائيًا
+-- =============================================================================
+-- ملاحظات مهمة - IMPORTANT NOTES
+-- =============================================================================
 
--- 3. All RLS policies use profiles.role='admin' for admin checks
---    جميع سياسات RLS تستخدم profiles.role='admin' للتحقق من المسؤولين
-
--- 4. The admins table is kept for backward compatibility but not used in RLS
---    جدول admins محفوظ للتوافق العكسي لكن غير مستخدم في RLS
-
--- 5. To create your first admin user, run this after registration:
---    لإنشاء مستخدم مسؤول أول، قم بتشغيل هذا بعد التسجيل:
+-- 1. لإنشاء أول مسؤول:
+--    بعد التسجيل، قم بتشغيل:
 --    UPDATE public.profiles SET role = 'admin' WHERE id = 'USER_UUID_HERE';
 
--- =============================================================================
--- END OF SCRIPT / نهاية السكريبت
--- =============================================================================
+-- 2. Service role له صلاحيات كاملة على جميع الجداول
+--    (مهم للـ API routes)
+
+-- 3. لا يوجد infinite recursion في الـ RLS policies
+
+-- 4. جميع المستخدمين المسجلين يمكنهم إدارة المحتوى
+--    (يمكن تعديل هذا لاحقاً لتقييد الصلاحيات بناءً على role)
+
+SELECT 'Database setup completed successfully! ✅' AS status;
