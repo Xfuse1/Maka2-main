@@ -1,0 +1,5 @@
+{
+    "claude-code.useTerminal": true,
+    "terminal.integrated.allowChords": false,
+    "terminal.integrated.enablePersistentSessions": false
+}
