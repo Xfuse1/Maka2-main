@@ -83,17 +83,24 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
         <SiteHeader />
 
-        <div className="container mx-auto px-4 py-16">
-          <div className="max-w-md mx-auto text-center space-y-6">
-            <div className="w-24 h-24 mx-auto bg-muted rounded-full flex items-center justify-center">
-              <ShoppingBag className="h-12 w-12 text-muted-foreground" />
+        <div className="container mx-auto px-4 py-20">
+          <div className="max-w-md mx-auto text-center space-y-8">
+            <div className="relative">
+              <div className="w-32 h-32 mx-auto bg-gradient-to-br from-primary/10 to-primary/5 rounded-full flex items-center justify-center">
+                <ShoppingBag className="h-16 w-16 text-primary/60" />
+              </div>
+              <div className="absolute -top-2 -right-2 w-full h-full">
+                <div className="w-32 h-32 mx-auto border-2 border-dashed border-primary/20 rounded-full animate-pulse" />
+              </div>
             </div>
-            <h2 className="text-3xl font-bold text-foreground">سلة التسوق فارغة</h2>
-            <p className="text-muted-foreground text-lg">لم تقومي بإضافة أي منتجات بعد</p>
-            <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
+            <div className="space-y-3">
+              <h2 className="text-3xl font-bold text-foreground">سلة التسوق فارغة</h2>
+              <p className="text-muted-foreground text-lg">لم تقومي بإضافة أي منتجات بعد</p>
+            </div>
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all px-8">
               <Link href="/">
                 <ShoppingBag className="h-5 w-5 ml-2" />
                 ابدئي التسوق الآن
@@ -107,37 +114,50 @@ export default function CartPage() {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
       <SiteHeader />
 
-      <div className="container mx-auto px-4 py-12">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/10 to-background border-b">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="container mx-auto px-4 py-8 relative">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground">سلة التسوق</h1>
+              <p className="text-muted-foreground mt-1">{items.length} منتج في السلة</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearCart}
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 bg-white/80 backdrop-blur-sm"
+            >
+              <Trash2 className="h-4 w-4 ml-2" />
+              إفراغ السلة
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="container mx-auto px-4 py-8">
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-foreground">سلة التسوق</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearCart}
-                className="text-red-600 border-red-600 hover:bg-red-50 bg-transparent"
+            {items.map((item, index) => (
+              <Card 
+                key={`${item.product.id}-${item.color.name}-${item.size}`} 
+                className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-bottom-4"
+                style={{ animationDelay: `${index * 100}ms`, animationFillMode: "both" }}
               >
-                <Trash2 className="h-4 w-4 ml-2" />
-                إفراغ السلة
-              </Button>
-            </div>
-
-            {items.map((item) => (
-              <Card key={`${item.product.id}-${item.color.name}-${item.size}`} className="border-2 border-border">
-                <CardContent className="p-6">
-                  <div className="flex gap-6">
+                <CardContent className="p-0">
+                  <div className="flex gap-4 md:gap-6 p-4 md:p-6">
                     {/* Product Image */}
-                    <div className="relative w-24 h-32 sm:w-32 sm:h-40 flex-shrink-0 rounded-lg overflow-hidden bg-muted border-2 border-border">
+                    <div className="relative w-24 h-32 sm:w-32 sm:h-40 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-muted to-muted/50 group">
                       <Image
                         src={item.product.image || item.product.product_images?.[0]?.image_url || "/placeholder.svg"}
                         alt={item.product.name}
                         fill
-                        className="object-cover"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                         sizes="128px"
                       />
                     </div>
@@ -224,52 +244,64 @@ export default function CartPage() {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <Card className="border-2 border-border sticky top-24">
+            <Card className="border-0 shadow-xl sticky top-24 overflow-hidden">
+              <div className="h-2 bg-gradient-to-r from-primary via-primary/80 to-primary/60" />
               <CardContent className="p-6 space-y-6">
-                <h3 className="text-2xl font-bold text-foreground">ملخص الطلب</h3>
+                <h3 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <ShoppingBag className="w-5 h-5 text-primary" />
+                  </div>
+                  ملخص الطلب
+                </h3>
 
                 <Separator />
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-lg">
                     <span className="text-muted-foreground">المجموع الفرعي</span>
-                    <span className="font-bold text-foreground">{getTotalPrice} ج.م</span>
+                    <span className="font-bold text-foreground">{getTotalPrice.toLocaleString('ar-EG')} ج.م</span>
                   </div>
                    
                 </div>
 
-                <Separator />
+                <Separator className="my-4" />
 
-                <div className="flex items-center justify-between text-2xl">
+                <div className="flex items-center justify-between text-2xl bg-gradient-to-r from-primary/5 to-primary/10 -mx-6 px-6 py-4">
                   <span className="font-bold text-foreground">الإجمالي</span>
-                  <span className="font-bold text-primary">{getTotalPrice} ج.م</span>
+                  <span className="font-bold text-primary">{getTotalPrice.toLocaleString('ar-EG')} ج.م</span>
                 </div>
 
                 <Button
                   onClick={handleCheckout}
                   size="lg"
-                  className="w-full bg-primary hover:bg-primary/90 text-lg py-6 relative"
+                  className="w-full bg-primary hover:bg-primary/90 text-lg py-6 shadow-lg hover:shadow-xl transition-all relative group"
                 >
-                  <ShoppingBag className="h-5 w-5 ml-2" />
+                  <ShoppingBag className="h-5 w-5 ml-2 group-hover:scale-110 transition-transform" />
                   إتمام الطلب
-                  {items.length > 0 && <span className="absolute -top-2 -left-2 bg-primary text-primary-foreground text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{items.length}</span>}
+                  {items.length > 0 && <span className="absolute -top-2 -left-2 bg-white text-primary text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-md">{items.length}</span>}
                 </Button>
                 {/* زر متابعة طلباتي */}
                 <Button
                   asChild
+                  variant="outline"
                   size="lg"
-                  className="w-full mt-4 bg-secondary hover:bg-secondary/90 text-lg py-6"
+                  className="w-full text-lg py-6 border-2 hover:bg-primary/5"
                 >
                   <Link href="/orders">
+                    <ArrowRight className="h-5 w-5 ml-2" />
                     متابعة طلباتي
                   </Link>
                 </Button>
 
-                <div className="bg-primary/5 rounded-lg p-4 border-2 border-primary/20">
-                  <p className="text-sm text-center text-muted-foreground">
-                    ✨ شحن مجاني لجميع الطلبات
-                    <br />🔒 الدفع آمن ومضمون
-                  </p>
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                  <div className="flex flex-col gap-2 text-sm text-center">
+                    <span className="flex items-center justify-center gap-2 text-green-700">
+                      <span>✨</span> شحن مجاني لجميع الطلبات
+                    </span>
+                    <span className="flex items-center justify-center gap-2 text-green-700">
+                      <span>🔒</span> الدفع آمن ومضمون
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

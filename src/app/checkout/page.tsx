@@ -339,22 +339,27 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5">
         <SiteHeader />
 
         <div className="container mx-auto px-4 py-20 text-center">
-          <h2 className="text-3xl font-bold mb-4">السلة فارغة</h2>
-          <p className="text-muted-foreground mb-8">لا توجد منتجات في سلة التسوق</p>
-          <Button asChild>
-            <Link href="/">العودة للتسوق</Link>
-          </Button>
+          <Card className="max-w-md mx-auto p-12 border-0 shadow-2xl rounded-3xl bg-white/80 backdrop-blur-sm">
+            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
+              <Wallet className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">السلة فارغة</h2>
+            <p className="text-muted-foreground mb-8">لا توجد منتجات في سلة التسوق</p>
+            <Button asChild className="rounded-xl px-8 py-6 text-lg shadow-lg hover:shadow-xl transition-all">
+              <Link href="/">العودة للتسوق</Link>
+            </Button>
+          </Card>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5">
       <CheckoutTracker
         items={items.map((item: any) => ({
           id: item.product?.id || "unknown",
@@ -371,12 +376,31 @@ export default function CheckoutPage() {
       />
       <SiteHeader />
 
-      <div className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-8 text-center">إتمام الطلب</h1>
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-r from-primary/10 via-primary/5 to-background py-12 overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-10 right-20 w-32 h-32 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-10 left-20 w-40 h-40 bg-primary/15 rounded-full blur-3xl" />
+        </div>
+        <div className="container mx-auto px-4 relative">
+          <div className="text-center">
+            <CreditCard className="h-12 w-12 mx-auto mb-4 text-primary" />
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3">إتمام الطلب</h1>
+            <p className="text-muted-foreground text-lg">أكملي بياناتك لإتمام عملية الشراء</p>
+          </div>
+        </div>
+      </div>
 
+      <div className="container mx-auto px-4 py-12">
         {uiError ? (
-          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-            {uiError}
+          <div className="mb-8 rounded-2xl border-0 bg-red-50 p-6 text-red-600 shadow-lg flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div>
+              <p className="font-bold text-lg">حدث خطأ</p>
+              <p>{uiError}</p>
+            </div>
           </div>
         ) : null}
 
@@ -384,26 +408,27 @@ export default function CheckoutPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Form */}
             <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>معلومات العميل</CardTitle>
+              <Card className="border-0 shadow-xl rounded-3xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 pb-6">
+                  <CardTitle className="text-xl">معلومات العميل</CardTitle>
                   <CardDescription>أدخل بياناتك الشخصية</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5 p-6">
                   <div className="space-y-2">
-                    <Label htmlFor="customerName">الاسم الكامل *</Label>
+                    <Label htmlFor="customerName" className="font-medium">الاسم الكامل *</Label>
                     <Input
                       id="customerName"
                       value={formData.customerName}
                       onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                       placeholder="أدخل اسمك الكامل"
                       required
+                      className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <Label htmlFor="customerEmail">البريد الإلكتروني *</Label>
+                      <Label htmlFor="customerEmail" className="font-medium">البريد الإلكتروني *</Label>
                       <Input
                         id="customerEmail"
                         type="email"
@@ -411,11 +436,12 @@ export default function CheckoutPage() {
                         onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                         placeholder="example@email.com"
                         required
+                        className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="customerPhone">رقم الهاتف *</Label>
+                      <Label htmlFor="customerPhone" className="font-medium">رقم الهاتف *</Label>
                       <Input
                         id="customerPhone"
                         type="tel"
@@ -423,62 +449,68 @@ export default function CheckoutPage() {
                         onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
                         placeholder="01234567890"
                         required
+                        className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                       />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Truck className="w-5 h-5" />
+              <Card className="border-0 shadow-xl rounded-3xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 pb-6">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                      <Truck className="w-5 h-5 text-blue-600" />
+                    </div>
                     عنوان الشحن
                   </CardTitle>
                   <CardDescription>أدخل عنوان التوصيل</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5 p-6">
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine1">العنوان (السطر الأول) *</Label>
+                    <Label htmlFor="addressLine1" className="font-medium">العنوان (السطر الأول) *</Label>
                     <Input
                       id="addressLine1"
                       value={formData.addressLine1}
                       onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
                       placeholder="رقم المبنى، اسم الشارع"
                       required
+                      className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="addressLine2">العنوان (السطر الثاني)</Label>
+                    <Label htmlFor="addressLine2" className="font-medium">العنوان (السطر الثاني)</Label>
                     <Input
                       id="addressLine2"
                       value={formData.addressLine2}
                       onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
                       placeholder="الحي، المنطقة"
+                      className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <div className="space-y-2">
-                      <Label htmlFor="city">المدينة *</Label>
+                      <Label htmlFor="city" className="font-medium">المدينة *</Label>
                       <Input
                         id="city"
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         placeholder="القاهرة"
                         required
+                        className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="state">المحافظة *</Label>
+                      <Label htmlFor="state" className="font-medium">المحافظة *</Label>
                       {shippingZones && shippingZones.length > 0 ? (
                         <div className="relative">
                           <input
                             id="state"
                             autoComplete="off"
-                            className="w-full rounded-md border bg-input px-3 py-2"
+                            className="w-full rounded-xl border-0 bg-muted/50 px-4 py-3 h-12 focus:ring-2 focus:ring-primary outline-none"
                             placeholder="ابحث عن المحافظة"
                             value={zoneQuery}
                             onChange={(e) => {
@@ -496,7 +528,7 @@ export default function CheckoutPage() {
                           />
 
                           {showZoneDropdown && (
-                            <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-auto rounded-md border bg-white shadow">
+                            <div className="absolute left-0 right-0 z-50 mt-2 max-h-56 overflow-auto rounded-2xl border-0 bg-white shadow-2xl">
                               {shippingZones
                                 .filter((z: any) => {
                                   const q = String(zoneQuery || "").trim().toLowerCase()
@@ -514,11 +546,11 @@ export default function CheckoutPage() {
                                       setZoneQuery(String(z.governorate_name_ar ?? z.governorate_name_en ?? z.name))
                                       setShowZoneDropdown(false)
                                     }}
-                                    className="px-3 py-2 hover:bg-accent/30 cursor-pointer"
+                                    className="px-4 py-3 hover:bg-primary/10 cursor-pointer transition-colors first:rounded-t-2xl last:rounded-b-2xl"
                                   >
                                     <div className="flex items-center justify-between">
-                                      <span>{z.governorate_name_ar ?? z.governorate_name_en ?? z.name}</span>
-                                      <span className="text-sm text-muted-foreground">{toNum(z.shipping_price, 0)} ج</span>
+                                      <span className="font-medium">{z.governorate_name_ar ?? z.governorate_name_en ?? z.name}</span>
+                                      <span className="text-sm text-primary font-bold">{toNum(z.shipping_price, 0)} ج</span>
                                     </div>
                                   </div>
                                 ))}
@@ -532,72 +564,84 @@ export default function CheckoutPage() {
                           onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                           placeholder="القاهرة"
                           required
+                          className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                         />
                       )}
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="postalCode">الرمز البريدي</Label>
+                      <Label htmlFor="postalCode" className="font-medium">الرمز البريدي</Label>
                       <Input
                         id="postalCode"
                         value={formData.postalCode}
                         onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
                         placeholder="12345"
+                        className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="notes">ملاحظات إضافية</Label>
+                    <Label htmlFor="notes" className="font-medium">ملاحظات إضافية</Label>
                     <Input
                       id="notes"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder="أي ملاحظات خاصة بالطلب"
+                      className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                     />
                   </div>
                 </CardContent>
               </Card>
 
-             <Card>
-  <CardHeader>
-    <CardTitle>طريقة الدفع</CardTitle>
+             <Card className="border-0 shadow-xl rounded-3xl overflow-hidden bg-white">
+  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 pb-6">
+    <CardTitle className="text-xl">طريقة الدفع</CardTitle>
     <CardDescription>اختر طريقة الدفع المفضلة</CardDescription>
   </CardHeader>
 
-  <CardContent>
+  <CardContent className="p-6">
     <RadioGroup
       value={formData.paymentMethod}
       onValueChange={(value) =>
         setFormData(prev => ({ ...prev, paymentMethod: value }))
       }
+      className="space-y-4"
     >
       {paymentMethods.map((method) => {
         const Icon = method.icon
+        const isSelected = formData.paymentMethod === method.id
 
         return (
           <Label
             key={method.id}
             htmlFor={method.id}
-            className="block border rounded-lg p-4 hover:bg-accent/50 transition-colors cursor-pointer"
+            className={`block border-2 rounded-2xl p-5 transition-all duration-300 cursor-pointer ${
+              isSelected 
+                ? 'border-primary bg-primary/5 shadow-lg' 
+                : 'border-border/50 hover:border-primary/50 hover:bg-muted/30'
+            }`}
           >
-            <div className="flex items-start gap-3">
-              <RadioGroupItem value={method.id} id={method.id} />
+            <div className="flex items-start gap-4">
+              <RadioGroupItem value={method.id} id={method.id} className="mt-1" />
 
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Icon className="w-5 h-5 text-primary" />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                isSelected ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+              }`}>
+                <Icon className="w-6 h-6" />
               </div>
 
               <div className="flex-1">
-                <div className="font-semibold">{method.name}</div>
+                <div className="font-bold text-lg">{method.name}</div>
                 <p className="text-sm text-muted-foreground mt-1">
                   {method.description}
                 </p>
 
                 {activeOffer && method.id === formData.paymentMethod && (
-                  <p className="mt-2 text-sm text-green-600 font-medium">
+                  <div className="mt-3 inline-flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1.5 rounded-full text-sm font-medium">
+                    <span>🎉</span>
                     وفر {activeOffer.discount_value}% عند الدفع باستخدام {method.name}
-                  </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -611,31 +655,31 @@ export default function CheckoutPage() {
 
             {/* Order Summary */}
             <div className="lg:col-span-1">
-              <Card className="sticky top-24">
-                <CardHeader>
-                  <CardTitle>ملخص الطلب</CardTitle>
+              <Card className="sticky top-24 border-0 shadow-2xl rounded-3xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 pb-6">
+                  <CardTitle className="text-xl">ملخص الطلب</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                <CardContent className="space-y-5 p-6">
+                  <div className="space-y-4 max-h-72 overflow-y-auto pr-2">
                     {items.map((item: any, index) => (
-                      <div key={index} className="flex gap-3">
-                        <div className="relative w-16 h-16 rounded-md overflow-hidden flex-shrink-0">
+                      <div key={index} className="flex gap-4 p-3 rounded-2xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md">
                           <Image
                                 src={getItemImage(item)}
                             alt={item?.product?.name || "product"}
                             fill
                             className="object-cover"
-                            sizes="64px"
+                            sizes="80px"
                             loading={index < 3 ? "eager" : "lazy"}
                             quality={75}
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{item?.product?.name}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="font-bold text-sm truncate">{item?.product?.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
                             {item?.color?.name} - {item?.size}
                           </p>
-                          <p className="text-sm">
+                          <p className="text-sm mt-2 text-primary font-bold">
                             {toNum(item?.quantity, 0)} × {toNum(item?.product?.price, 0)} جنيه
                           </p>
                         </div>
@@ -643,19 +687,20 @@ export default function CheckoutPage() {
                     ))}
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-border/30" />
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">المجموع الفرعي</span>
-                      <span>{toNum(subtotal, 0)} جنيه</span>
+                      <span className="font-medium">{toNum(subtotal, 0)} جنيه</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">الشحن</span>
-                      <span>
+                      <span className="font-medium">
                         {selectedZone ? (
-                          <span>
-                            {(selectedZone.governorate_name_ar ?? selectedZone.governorate_name_en ?? selectedZone.name)} — {toNum(shippingCost, 0)} جنيه
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">({selectedZone.governorate_name_ar ?? selectedZone.governorate_name_en ?? selectedZone.name})</span>
+                            {toNum(shippingCost, 0)} جنيه
                           </span>
                         ) : (
                           <span>{toNum(shippingCost, 0)} جنيه</span>
@@ -664,8 +709,9 @@ export default function CheckoutPage() {
                     </div>
                     
                     {discountInfo.amount > 0 && (
-                      <div className="flex justify-between text-sm text-green-600 font-medium">
-                        <span>
+                      <div className="flex justify-between text-sm bg-green-50 text-green-700 p-3 rounded-xl font-medium">
+                        <span className="flex items-center gap-2">
+                          <span>🎉</span>
                           خصم {activeOffer?.payment_method === 'kashier' || activeOffer?.payment_method === 'cashier' ? 'الدفع الإلكتروني' : 'عرض الدفع'}
                           {' '}({activeOffer?.discount_value}%)
                         </span>
@@ -673,18 +719,33 @@ export default function CheckoutPage() {
                       </div>
                     )}
 
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg">
+                    <Separator className="bg-border/30" />
+                    <div className="flex justify-between font-bold text-xl pt-2">
                       <span>الإجمالي</span>
-                      <span>{toNum(total, 0)} جنيه</span>
+                      <span className="text-primary">{toNum(total, 0)} جنيه</span>
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full" size="lg" disabled={isProcessing}>
-                    {isProcessing ? "جاري المعالجة..." : <>إتمام الطلب <ArrowRight className="mr-2 h-4 w-4" /></>}
+                  <Button 
+                    type="submit" 
+                    className="w-full rounded-2xl py-7 text-lg font-bold shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]" 
+                    size="lg" 
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        جاري المعالجة...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        إتمام الطلب
+                        <ArrowRight className="h-5 w-5" />
+                      </span>
+                    )}
                   </Button>
 
-                  <p className="text-xs text-muted-foreground text-center">
+                  <p className="text-xs text-muted-foreground text-center leading-relaxed">
                     بالضغط على "إتمام الطلب"، أنت توافق على شروط الاستخدام وسياسة الخصوصية
                   </p>
                 </CardContent>

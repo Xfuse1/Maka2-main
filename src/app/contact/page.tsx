@@ -166,34 +166,58 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
       <SiteHeader />
 
-      {/* Contact Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">تواصل معنا</h2>
-            <p className="text-xl text-muted-foreground">نحن هنا للإجابة على استفساراتك</p>
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/10 to-background border-b">
+        <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-5" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2" />
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-2xl translate-y-1/2 translate-x-1/2" />
+        
+        <div className="container mx-auto px-4 py-16 md:py-24 relative">
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+              <MessageCircle className="w-4 h-4" />
+              نحن هنا لمساعدتك
+            </div>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-foreground">
+              تواصل معنا
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+              نحن هنا للإجابة على استفساراتك ومساعدتك في أي وقت
+            </p>
           </div>
+        </div>
+      </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      {/* Contact Section */}
+      <section className="py-12 md:py-20">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
             {/* Contact Form */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">أرسل لنا رسالة</CardTitle>
-                <CardDescription>سنرد عليك في أقرب وقت ممكن</CardDescription>
+            <Card className="border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden">
+              <div className="h-2 bg-gradient-to-r from-primary via-primary/80 to-primary/60" />
+              <CardHeader className="pb-4">
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-primary" />
+                  </div>
+                  أرسل لنا رسالة
+                </CardTitle>
+                <CardDescription className="text-base">سنرد عليك في أقرب وقت ممكن</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="name">الاسم</Label>
+                    <Label htmlFor="name" className="text-sm font-medium">الاسم</Label>
                     <Input
                       id="name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="أدخل اسمك"
+                      placeholder="أدخل اسمك الكامل"
                       required
+                      className="h-12 border-2 transition-all focus:border-primary"
                     />
                     {fullNameError ? (
                       <p className="text-sm text-destructive mt-1">{fullNameError}</p>
@@ -201,7 +225,7 @@ export default function ContactPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">البريد الإلكتروني</Label>
+                    <Label htmlFor="email" className="text-sm font-medium">البريد الإلكتروني</Label>
                     <Input
                       id="email"
                       type="email"
@@ -209,6 +233,7 @@ export default function ContactPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="example@email.com"
                       required
+                      className="h-12 border-2 transition-all focus:border-primary"
                     />
                     {emailError ? (
                       <p className="text-sm text-destructive mt-1">{emailError}</p>
@@ -216,13 +241,14 @@ export default function ContactPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">رقم الهاتف</Label>
+                    <Label htmlFor="phone" className="text-sm font-medium">رقم الهاتف</Label>
                     <Input
                       id="phone"
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="01234567890"
+                      className="h-12 border-2 transition-all focus:border-primary"
                     />
                     {phoneError ? (
                       <p className="text-sm text-destructive mt-1">{phoneError}</p>
@@ -230,7 +256,7 @@ export default function ContactPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="message">الرسالة</Label>
+                    <Label htmlFor="message" className="text-sm font-medium">الرسالة</Label>
                     <Textarea
                       id="message"
                       value={message}
@@ -238,94 +264,109 @@ export default function ContactPage() {
                       placeholder="اكتب رسالتك هنا..."
                       rows={5}
                       required
+                      className="border-2 transition-all focus:border-primary resize-none"
                     />
                   </div>
 
-                  <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                    {status === 'success' ? 'تم الإرسال بنجاح!' : loading ? 'جاري الإرسال...' : 'إرسال الرسالة'}
+                  <Button 
+                    type="submit" 
+                    className="w-full h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all" 
+                    size="lg" 
+                    disabled={loading}
+                  >
+                    {status === 'success' ? '✓ تم الإرسال بنجاح!' : loading ? 'جاري الإرسال...' : 'إرسال الرسالة'}
                   </Button>
 
                   {/* Status / error message area */}
                   {status === 'success' && (
-                    <p className="text-sm text-success mt-2">تم إرسال رسالتك بنجاح. سنرد عليك قريبًا.</p>
+                    <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm">
+                      ✓ تم إرسال رسالتك بنجاح. سنرد عليك قريبًا.
+                    </div>
                   )}
                   {status === 'error' && errorMsg && (
-                    <p className="text-sm text-destructive mt-2">{errorMsg}</p>
+                    <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                      {errorMsg}
+                    </div>
                   )}
                 </form>
               </CardContent>
             </Card>
 
             {/* Contact Information */}
-            <div className="space-y-6">
-              <Card>
+            <div className="space-y-4">
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Phone className="w-6 h-6 text-primary" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-primary/20 to-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <Phone className="w-7 h-7 text-primary" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg mb-2">الهاتف</h3>
-                      <p className="text-muted-foreground" dir="ltr">{contactInfo.phone}</p>
+                      <h3 className="font-bold text-lg mb-1">الهاتف</h3>
+                      <p className="text-muted-foreground text-lg" dir="ltr">{contactInfo.phone}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <MessageCircle className="w-6 h-6 text-primary" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-green-500/20 to-green-500/10 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <MessageCircle className="w-7 h-7 text-green-600" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg mb-2">واتساب</h3>
+                      <h3 className="font-bold text-lg mb-1">واتساب</h3>
                       <p className="text-muted-foreground" dir="ltr">{contactInfo.whatsapp}</p>
                       <a
                         href={`https://wa.me/20${contactInfo.whatsapp.replace(/^0+/, '')}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline"
+                        className="inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-medium mt-2 transition-colors"
                       >
                         {contactInfo.whatsappSubtitle || "تواصل عبر واتساب"}
+                        <span className="text-xs">→</span>
                       </a>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-6 h-6 text-primary" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-blue-500/10 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <Mail className="w-7 h-7 text-blue-600" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg mb-2">البريد الإلكتروني</h3>
+                      <h3 className="font-bold text-lg mb-1">البريد الإلكتروني</h3>
                       <p className="text-muted-foreground">{contactInfo.email}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-6 h-6 text-primary" />
+                    <div className="w-14 h-14 bg-gradient-to-br from-red-500/20 to-red-500/10 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <MapPin className="w-7 h-7 text-red-500" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg mb-2">العنوان</h3>
+                      <h3 className="font-bold text-lg mb-1">العنوان</h3>
                       <p className="text-muted-foreground">{contactInfo.address}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-primary/5">
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/5 to-primary/10 overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/60" />
                 <CardContent className="p-6">
-                  <h3 className="font-bold text-lg mb-4">ساعات العمل</h3>
-                  <div className="space-y-2 text-muted-foreground whitespace-pre-line">
+                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                    <span className="text-xl">🕐</span>
+                    ساعات العمل
+                  </h3>
+                  <div className="space-y-2 text-muted-foreground whitespace-pre-line leading-relaxed">
                     {contactInfo.workingHours}
                   </div>
                 </CardContent>

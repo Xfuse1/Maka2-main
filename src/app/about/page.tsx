@@ -50,8 +50,14 @@ export default function AboutPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="text-xl text-foreground/70">جاري التحميل...</div>
+      <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+            <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto relative" />
+          </div>
+          <p className="text-lg text-muted-foreground">جاري التحميل...</p>
+        </div>
       </div>
     )
   }
@@ -113,17 +119,27 @@ export default function AboutPage() {
   const ctaButton = getSection("cta.button", "تسوقي الآن")
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5 text-foreground">
       <SiteHeader />
 
       {/* Hero Section */}
       <AnimatedSection>
-        <section className="relative bg-gradient-to-t from-background to-secondary/30 pt-24 pb-16 md:pt-32 md:pb-24">
-          <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-primary mb-4 tracking-tight">
+        <section className="relative overflow-hidden py-24 md:py-32">
+          {/* Decorative Background */}
+          <div className="absolute inset-0">
+            <div className="absolute top-20 right-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-10 left-10 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+          </div>
+          
+          <div className="container mx-auto px-4 text-center relative">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-6">
+              <Heart className="w-4 h-4" />
+              <span className="text-sm font-medium">تعرفي علينا</span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-foreground mb-6 tracking-tight">
               {heroTitle}
             </h1>
-            <p className="text-lg md:text-xl text-foreground/80 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               {heroSubtitle}
             </p>
           </div>
@@ -132,28 +148,38 @@ export default function AboutPage() {
 
       {/* Story Section */}
       <AnimatedSection>
-        <section className="py-16 md:py-24 bg-background">
+        <section className="py-20 md:py-28">
           <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="relative w-full h-40 md:h-40 lg:h-80 rounded-2xl overflow-hidden shadow-2xl group">
-                {storyImageUrl ? (
-                  <img
-                    src={storyImageUrl}
-                    alt="قصتنا"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-muted/40" />
-                )}
-                <div className="absolute inset-0 bg-black/20"></div>
+            <div className="grid md:grid-cols-2 gap-16 items-center">
+              <div className="relative group">
+                <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-primary/10 rounded-3xl blur-2xl opacity-50 group-hover:opacity-80 transition-opacity duration-500" />
+                <div className="relative h-64 md:h-[450px] rounded-3xl overflow-hidden shadow-2xl">
+                  {storyImageUrl ? (
+                    <img
+                      src={storyImageUrl}
+                      alt="قصتنا"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-muted to-muted/50" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                </div>
               </div>
-              <div className="space-y-6">
-                <h2 className="text-3xl md:text-4xl font-bold text-foreground border-r-4 border-primary pr-4">
-                  {storyTitle}
-                </h2>
-                <div className="space-y-4 text-base md:text-lg text-foreground/80 leading-relaxed">
-                  <p>{storyP1}</p>
-                  <p>{storyP2}</p>
+              <div className="space-y-8">
+                <div className="inline-block">
+                  <h2 className="text-4xl md:text-5xl font-bold text-foreground relative">
+                    {storyTitle}
+                    <span className="absolute -bottom-3 right-0 w-20 h-1.5 bg-primary rounded-full" />
+                  </h2>
+                </div>
+                <div className="space-y-6 text-lg text-muted-foreground leading-relaxed">
+                  <p className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-border/30 shadow-lg">
+                    {storyP1}
+                  </p>
+                  <p className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-border/30 shadow-lg">
+                    {storyP2}
+                  </p>
                 </div>
               </div>
             </div>
@@ -163,25 +189,34 @@ export default function AboutPage() {
 
       {/* Values Section */}
       <AnimatedSection>
-        <section className="py-16 md:py-24 bg-secondary/30">
+        <section className="py-20 md:py-28 bg-gradient-to-b from-primary/5 to-background">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12 text-foreground">
-              {valuesTitle}
-            </h2>
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-6">
+                <Award className="w-4 h-4" />
+                <span className="text-sm font-medium">ما يميزنا</span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-bold text-foreground">
+                {valuesTitle}
+              </h2>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {[
-                { icon: Sparkles, title: innovationTitle, desc: innovationDesc },
-                { icon: Award, title: qualityTitle, desc: qualityDesc },
-                { icon: Users, title: customersTitle, desc: customersDesc },
-                { icon: Heart, title: passionTitle, desc: passionDesc },
+                { icon: Sparkles, title: innovationTitle, desc: innovationDesc, color: "from-purple-500 to-pink-500" },
+                { icon: Award, title: qualityTitle, desc: qualityDesc, color: "from-yellow-500 to-orange-500" },
+                { icon: Users, title: customersTitle, desc: customersDesc, color: "from-blue-500 to-cyan-500" },
+                { icon: Heart, title: passionTitle, desc: passionDesc, color: "from-red-500 to-rose-500" },
               ].map((item, i) => (
-                <Card key={i} className="bg-background border-border/50 shadow-lg hover:shadow-primary/20 hover:-translate-y-2 transition-all duration-300">
-                  <CardContent className="p-6 text-center">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-5 border-2 border-primary/20">
-                      <item.icon className="h-8 w-8 text-primary" />
+                <Card 
+                  key={i} 
+                  className="bg-white/80 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl hover:-translate-y-3 transition-all duration-500 rounded-3xl overflow-hidden group"
+                >
+                  <CardContent className="p-8 text-center">
+                    <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                      <item.icon className="h-10 w-10 text-white" />
                     </div>
-                    <h3 className="text-xl font-semibold mb-2 text-foreground">{item.title}</h3>
-                    <p className="text-foreground/70 leading-relaxed text-sm">{item.desc}</p>
+                    <h3 className="text-xl font-bold mb-3 text-foreground">{item.title}</h3>
+                    <p className="text-muted-foreground leading-relaxed">{item.desc}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -192,30 +227,42 @@ export default function AboutPage() {
       
       {/* Team Section */}
       <AnimatedSection>
-        <section className="py-16 md:py-24 bg-background">
+        <section className="py-20 md:py-28">
           <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-5 gap-12 items-center">
-              <div className="md:col-span-3 space-y-6">
-                <h2 className="text-3xl md:text-4xl font-bold text-foreground border-r-4 border-primary pr-4">
-                  {teamTitle}
-                </h2>
-                <div className="space-y-4 text-base md:text-lg text-foreground/80 leading-relaxed">
-                  <p>{teamP1}</p>
-                   <p>{teamP2}</p>
+            <div className="grid md:grid-cols-5 gap-16 items-center">
+              <div className="md:col-span-3 space-y-8">
+                <div className="inline-block">
+                  <h2 className="text-4xl md:text-5xl font-bold text-foreground relative">
+                    {teamTitle}
+                    <span className="absolute -bottom-3 right-0 w-20 h-1.5 bg-primary rounded-full" />
+                  </h2>
+                </div>
+                <div className="space-y-6 text-lg text-muted-foreground leading-relaxed">
+                  <p className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-border/30 shadow-lg">
+                    {teamP1}
+                  </p>
+                  <p className="p-6 bg-gradient-to-r from-primary/10 to-primary/5 rounded-2xl border border-primary/20 shadow-lg font-medium text-foreground">
+                    {teamP2}
+                  </p>
                 </div>
               </div>
-               <div className="md:col-span-2 relative w-full h-96 rounded-2xl overflow-hidden shadow-2xl group">
-                <Image 
-                  src={teamImageUrl} 
-                  alt="فريقنا" 
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  sizes="(max-width: 768px) 100vw, 40vw"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-                <div className="absolute bottom-4 right-4 text-white">
-                  <h4 className="font-bold text-lg">{teamImageTitle}</h4>
-                  <p className="text-sm">{teamImageSubtitle}</p>
+              <div className="md:col-span-2 relative group">
+                <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-primary/10 rounded-3xl blur-2xl opacity-50 group-hover:opacity-80 transition-opacity duration-500" />
+                <div className="relative h-[450px] rounded-3xl overflow-hidden shadow-2xl">
+                  <Image 
+                    src={teamImageUrl} 
+                    alt="فريقنا" 
+                    fill
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    sizes="(max-width: 768px) 100vw, 40vw"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                  <div className="absolute bottom-6 right-6 left-6 text-white">
+                    <div className="backdrop-blur-md bg-white/10 rounded-2xl p-4 border border-white/20">
+                      <h4 className="font-bold text-xl mb-1">{teamImageTitle}</h4>
+                      <p className="text-white/80">{teamImageSubtitle}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -225,22 +272,30 @@ export default function AboutPage() {
 
       {/* CTA Section */}
       <AnimatedSection>
-        <section className="py-16 md:py-24 bg-secondary/20">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">{ctaTitle}</h2>
-            <p className="text-lg text-foreground/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-              {ctaSubtitle}
-            </p>
-            <Button
-              asChild
-              size="lg"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-7 shadow-lg hover:shadow-xl transition-all duration-300 group"
-            >
-              <Link href="/">
-                {ctaButton}
-                <MoveRight className="mr-3 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
-              </Link>
-            </Button>
+        <section className="py-20 md:py-28">
+          <div className="container mx-auto px-4">
+            <Card className="border-0 shadow-2xl rounded-3xl overflow-hidden bg-gradient-to-r from-primary via-primary/90 to-primary/80 relative">
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute top-10 right-10 w-40 h-40 bg-white rounded-full blur-3xl" />
+                <div className="absolute bottom-10 left-10 w-60 h-60 bg-white rounded-full blur-3xl" />
+              </div>
+              <CardContent className="p-12 md:p-16 text-center relative">
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">{ctaTitle}</h2>
+                <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto leading-relaxed">
+                  {ctaSubtitle}
+                </p>
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-white hover:bg-white/90 text-primary text-lg px-10 py-7 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 group"
+                >
+                  <Link href="/">
+                    {ctaButton}
+                    <MoveRight className="mr-3 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </section>
       </AnimatedSection>

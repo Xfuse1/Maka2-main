@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { User, Settings, LogOut, Mail, Phone, Save } from "lucide-react"
 
 interface AccountClientProps {
   user: any
@@ -60,62 +61,129 @@ export function AccountClient({ user, profile }: AccountClientProps) {
   }
 
   return (
-    <Tabs defaultValue="profile" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 gap-2 mb-6">
-        <TabsTrigger value="profile">الملف الشخصي</TabsTrigger>
-        <TabsTrigger value="settings">الإعدادات</TabsTrigger>
+    <Tabs defaultValue="profile" className="w-full max-w-3xl mx-auto">
+      <TabsList className="grid w-full grid-cols-2 gap-2 mb-8 bg-white/80 backdrop-blur-sm p-2 rounded-2xl shadow-lg border-0">
+        <TabsTrigger 
+          value="profile" 
+          className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-3 transition-all duration-300"
+        >
+          <User className="h-4 w-4" />
+          الملف الشخصي
+        </TabsTrigger>
+        <TabsTrigger 
+          value="settings"
+          className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-3 transition-all duration-300"
+        >
+          <Settings className="h-4 w-4" />
+          الإعدادات
+        </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="profile">
-        <Card>
-          <CardHeader>
-            <CardTitle>الملف الشخصي</CardTitle>
-            <CardDescription>قم بتحديث معلوماتك الشخصية هنا.</CardDescription>
+      <TabsContent value="profile" className="animate-in fade-in-50 duration-300">
+        <Card className="border-0 shadow-2xl rounded-3xl overflow-hidden bg-white">
+          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 pb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center">
+                <User className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">الملف الشخصي</CardTitle>
+                <CardDescription>قم بتحديث معلوماتك الشخصية هنا</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <form onSubmit={handleProfileUpdate}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">البريد الإلكتروني</Label>
-                <Input id="email" value={user.email} disabled className="bg-muted" />
+            <CardContent className="space-y-6 p-8">
+              <div className="space-y-3">
+                <Label htmlFor="email" className="flex items-center gap-2 font-medium">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  البريد الإلكتروني
+                </Label>
+                <Input 
+                  id="email" 
+                  value={user.email} 
+                  disabled 
+                  className="bg-muted/50 border-0 rounded-xl h-12 text-muted-foreground" 
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">الاسم</Label>
+              <div className="space-y-3">
+                <Label htmlFor="name" className="flex items-center gap-2 font-medium">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  الاسم
+                </Label>
                 <Input
                   id="name"
                   value={profileData.name}
                   onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
                   placeholder="أدخل اسمك"
+                  className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">رقم الهاتف</Label>
+              <div className="space-y-3">
+                <Label htmlFor="phone" className="flex items-center gap-2 font-medium">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  رقم الهاتف
+                </Label>
                 <Input
                   id="phone"
                   value={profileData.phone}
                   onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
                   placeholder="أدخل رقم هاتفك"
+                  className="border-0 bg-muted/50 rounded-xl h-12 focus:ring-2 focus:ring-primary"
                 />
               </div>
             </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "جاري الحفظ..." : "حفظ التغييرات"}
+            <CardFooter className="p-8 pt-0">
+              <Button 
+                type="submit" 
+                disabled={isLoading}
+                className="w-full rounded-xl py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    جاري الحفظ...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Save className="h-5 w-5" />
+                    حفظ التغييرات
+                  </span>
+                )}
               </Button>
             </CardFooter>
           </form>
         </Card>
       </TabsContent>
 
-      <TabsContent value="settings">
-        <Card>
-          <CardHeader>
-            <CardTitle>إعدادات الحساب</CardTitle>
-            <CardDescription>إدارة أمان حسابك وتسجيل الخروج.</CardDescription>
+      <TabsContent value="settings" className="animate-in fade-in-50 duration-300">
+        <Card className="border-0 shadow-2xl rounded-3xl overflow-hidden bg-white">
+          <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 pb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center">
+                <Settings className="h-7 w-7 text-red-600" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">إعدادات الحساب</CardTitle>
+                <CardDescription>إدارة أمان حسابك وتسجيل الخروج</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <Button variant="destructive" onClick={handleLogout}>
-              تسجيل الخروج
-            </Button>
+          <CardContent className="p-8">
+            <div className="bg-red-50/50 rounded-2xl p-6 border border-red-100">
+              <h3 className="font-bold text-foreground mb-2">تسجيل الخروج</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                سيتم تسجيل خروجك من حسابك على هذا الجهاز
+              </p>
+              <Button 
+                variant="destructive" 
+                onClick={handleLogout}
+                className="rounded-xl px-6 py-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+              >
+                <LogOut className="h-5 w-5 ml-2" />
+                تسجيل الخروج
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
