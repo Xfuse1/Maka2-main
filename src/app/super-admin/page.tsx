@@ -186,14 +186,13 @@ export default function SuperAdminDashboard() {
         const error = await response.json()
         throw new Error(error.error || "Failed to update store status")
       }
-response = await fetch(`/api/super-admin/stores?store_id=${selectedStore.id}`, {
-        method: "DELETE",
-      })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to delete store")
-      }
+      // Reload data to show updated status
+      loadDashboardData()
+    } catch (error) {
+      console.error("Error updating store status:", error)
+      alert("فشل تحديث حالة المتجر")
+    }
   }
 
   const handleDeleteStore = async () => {
@@ -435,8 +434,8 @@ response = await fetch(`/api/super-admin/stores?store_id=${selectedStore.id}`, {
                             </Button>
                             <Button
                               variant="ghost"
-                              size="sm"status)
-                              }
+                              size="sm"
+                              onClick={() => handleToggleStoreStatus(store.id, store.status)}
                               className={
                                 store.status === "active"
                                   ? "text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -444,9 +443,7 @@ response = await fetch(`/api/super-admin/stores?store_id=${selectedStore.id}`, {
                               }
                             >
                               {store.status === "active" ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-                              {store.status === "active"
-                              {store.is_active ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-                              {store.is_active ? "تعطيل" : "تفعيل"}
+                              {store.status === "active" ? "تعطيل" : "تفعيل"}
                             </Button>
                             <Button
                               variant="ghost"

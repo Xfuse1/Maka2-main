@@ -6,6 +6,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Disable standalone output (causes symlink errors on Windows)
+  output: undefined,
   // Performance optimizations
   experimental: {
     optimizeCss: true,
@@ -78,8 +80,8 @@ const nextConfig = {
       transform: 'lucide-react/dist/esm/icons/{{member}}',
     },
   },
-  // Output optimization
-  output: 'standalone',
+  // Output optimization - DISABLED due to Windows symlink errors
+  // output: 'standalone',
   // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
@@ -139,7 +141,7 @@ nextConfig.headers = async () => {
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
       ],
     },
-  ]
+  ];
 }
 
-export default nextConfig
+export default nextConfig;
