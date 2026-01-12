@@ -9,6 +9,11 @@ const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|web
 const PUBLIC_PATHS = new Set([
   "/admin/login",
   "/admin/signup",
+])
+
+// Super admin only paths
+const SUPER_ADMIN_PATHS = new Set([
+  "/super-admin",
   "/create-store",
 ])
 
@@ -66,6 +71,11 @@ export async function middleware(request: NextRequest) {
   // Fast path: Allow public auth pages (no DB query needed)
   if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next()
+  }
+
+  // Check Super Admin paths first (highest security)
+  if (SUPER_ADMIN_PATHS.has(pathname)) {
+    return handleSuperAdminPath(request, pathname)
   }
 
   // Fast path: Allow public GET API endpoints
@@ -255,6 +265,84 @@ function extractSubdomain(hostname: string, platformDomain: string): string | nu
   }
   
   return subdomain
+}
+
+/**
+ * Handle Super Admin protected paths
+ */
+async function handleSuperAdminPath(
+  request: NextRequest,
+  pathname: string
+): Promise<NextResponse> {
+  try {
+    let response = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    })
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              request.cookies.set(name, value)
+            )
+            response = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
+    // التحقق من المستخدم
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      // إعادة توجيه لصفحة تسجيل الدخول
+      const url = request.nextUrl.clone()
+      url.pathname = "/admin/login"
+      url.searchParams.set("redirect", pathname)
+      return NextResponse.redirect(url)
+    }
+
+    // التحقق من دور super_admin
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    // السماح لـ super_admin فقط
+    if (!profile || profile.role !== "super_admin") {
+      // ليس super_admin - إعادة توجيه للصفحة الرئيسية
+      const url = request.nextUrl.clone()
+      url.pathname = "/"
+      return NextResponse.redirect(url)
+    }
+
+    // إضافة معلومات الدور للـ headers
+    response.headers.set("x-user-role", profile.role)
+    response.headers.set("x-is-super-admin", "true")
+
+    return response
+  } catch (error) {
+    console.error("[middleware] Super Admin auth error:", error)
+    const url = request.nextUrl.clone()
+    url.pathname = "/admin/login"
+    return NextResponse.redirect(url)
+  }
 }
 
 /**
