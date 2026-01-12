@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     // الحصول على البيانات من الطلب
     const body = await request.json()
-    const { store_name, subdomain, slug, email, phone, description } = body
+    const { store_name, subdomain, slug, email, phone, description, plan_id } = body
 
     // التحقق من البيانات المطلوبة
     if (!store_name || !subdomain || !slug || !email) {
@@ -92,6 +92,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // جلب بيانات الباقة إذا تم تحديدها
+    let selectedPlan = null
+    let subscriptionStatus = "pending_payment"
+    let trialEndsAt = null
+
+    if (plan_id) {
+      const { data: plan } = await supabaseAdmin
+        .from("subscription_plans")
+        .select("*")
+        .eq("id", plan_id)
+        .eq("is_active", true)
+        .single()
+
+      if (plan) {
+        selectedPlan = plan
+        // إذا كانت الباقة مجانية أو تجربة (price = 0)، يتم تفعيل المتجر مباشرة
+        if (plan.price === 0) {
+          subscriptionStatus = "trial"
+          // حساب تاريخ انتهاء التجربة
+          const trialEnd = new Date()
+          trialEnd.setDate(trialEnd.getDate() + plan.duration_days)
+          trialEndsAt = trialEnd.toISOString()
+        }
+      }
+    } else {
+      // إذا لم يتم تحديد باقة، استخدم الباقة الافتراضية
+      const { data: defaultPlan } = await supabaseAdmin
+        .from("subscription_plans")
+        .select("*")
+        .eq("is_default", true)
+        .eq("is_active", true)
+        .single()
+
+      if (defaultPlan) {
+        selectedPlan = defaultPlan
+        if (defaultPlan.price === 0) {
+          subscriptionStatus = "trial"
+          const trialEnd = new Date()
+          trialEnd.setDate(trialEnd.getDate() + defaultPlan.duration_days)
+          trialEndsAt = trialEnd.toISOString()
+        }
+      }
+    }
+
     // إنشاء المتجر باستخدام Admin client
     const { data: newStore, error: createError } = await supabaseAdmin
       .from("stores")
@@ -103,8 +147,11 @@ export async function POST(request: NextRequest) {
         email,
         phone: phone || null,
         description: description || null,
-        status: "active", // نشط مباشرة (يمكن تغييره لـ pending للموافقة اليدوية)
-        subscription_plan: "free", // الباقة المجانية افتراضياً
+        status: subscriptionStatus === "trial" ? "active" : "inactive", // المتجر نشط فقط للتجربة
+        subscription_status: subscriptionStatus,
+        subscription_plan_id: selectedPlan?.id || null,
+        trial_ends_at: trialEndsAt,
+        subscription_plan: selectedPlan?.name_en || "free", // للتوافق مع القديم
         commission_rate: 10.0, // عمولة 10%
         primary_color: "#3b82f6",
         secondary_color: "#10b981",
@@ -171,15 +218,48 @@ export async function POST(request: NextRequest) {
       console.error("[API] Error updating profile role:", profileError)
     }
 
+    // إنشاء سجل الاشتراك إذا كانت هناك باقة
+    if (selectedPlan) {
+      const startDate = new Date()
+      const endDate = new Date()
+      endDate.setDate(endDate.getDate() + selectedPlan.duration_days)
+
+      const { error: subscriptionError } = await supabaseAdmin
+        .from("subscriptions")
+        .insert({
+          store_id: (newStore as any).id,
+          plan_id: selectedPlan.id,
+          status: selectedPlan.price === 0 ? "active" : "pending",
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          amount_paid: selectedPlan.price === 0 ? 0 : null, // للمجاني فقط
+          payment_method: selectedPlan.price === 0 ? "free" : null,
+        } as any)
+
+      if (subscriptionError) {
+        console.error("[API] Error creating subscription:", subscriptionError)
+      }
+    }
+
     // إرسال بريد ترحيب (اختياري - يحتاج لإعداد Email Service)
     // await sendWelcomeEmail(email, store_name, subdomain)
+
+    // تحديد ما إذا كان يحتاج لدفع
+    const requiresPayment = selectedPlan && selectedPlan.price > 0
 
     return NextResponse.json(
       {
         success: true,
         store: newStore,
         message: "تم إنشاء المتجر بنجاح!",
-        store_url: `https://${subdomain}.${process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"}`,
+        store_url: `https://${subdomain}.${process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"}`,
+        requires_payment: requiresPayment,
+        plan: selectedPlan ? {
+          id: selectedPlan.id,
+          name: selectedPlan.name,
+          price: selectedPlan.price,
+          duration_days: selectedPlan.duration_days,
+        } : null,
       },
       { status: 201 }
     )

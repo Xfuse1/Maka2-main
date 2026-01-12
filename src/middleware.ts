@@ -9,12 +9,19 @@ const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|web
 const PUBLIC_PATHS = new Set([
   "/admin/login",
   "/admin/signup",
+  "/create-store",
+  "/landing",
+  "/checkout/subscription",
+  "/subscription/success",
+  "/subscription/cancel",
+  "/store-pending-payment",
+  "/store-trial-expired",
+  "/store-subscription-expired",
 ])
 
 // Super admin only paths
 const SUPER_ADMIN_PATHS = new Set([
   "/super-admin",
-  "/create-store",
 ])
 
 // Public API paths for GET requests
@@ -69,6 +76,14 @@ export async function middleware(request: NextRequest) {
       const response = NextResponse.next()
       response.headers.set("x-subdomain", subdomain)
       return response
+    }
+    
+    // Main domain (no subdomain) - redirect to landing page
+    // Only redirect root path "/" to landing page
+    if (pathname === "/" || pathname === "") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/landing"
+      return NextResponse.rewrite(url)
     }
   }
   
@@ -379,7 +394,7 @@ async function handleStoreSubdomain(request: NextRequest, subdomain: string) {
     // البحث عن المتجر في قاعدة البيانات
     const { data: store, error } = await supabase
       .from("stores")
-      .select("id, store_name, status, subdomain, slug, primary_color, secondary_color, logo_url")
+      .select("id, store_name, status, subdomain, slug, primary_color, secondary_color, logo_url, subscription_status, trial_ends_at")
       .eq("subdomain", subdomain)
       .single()
     
@@ -390,6 +405,37 @@ async function handleStoreSubdomain(request: NextRequest, subdomain: string) {
       // إعادة توجيه لصفحة 404 مخصصة للمتاجر غير الموجودة
       const url = request.nextUrl.clone()
       url.pathname = "/store-not-found"
+      return NextResponse.rewrite(url)
+    }
+    
+    // التحقق من حالة الاشتراك أولاً
+    const subscriptionStatus = store.subscription_status || "active"
+    
+    if (subscriptionStatus === "pending_payment") {
+      console.warn(`[middleware] Store ${subdomain} is pending payment`)
+      
+      const url = request.nextUrl.clone()
+      url.pathname = "/store-pending-payment"
+      return NextResponse.rewrite(url)
+    }
+    
+    // التحقق من انتهاء الفترة التجريبية
+    if (subscriptionStatus === "trial" && store.trial_ends_at) {
+      const trialEnd = new Date(store.trial_ends_at)
+      if (trialEnd < new Date()) {
+        console.warn(`[middleware] Store ${subdomain} trial has expired`)
+        
+        const url = request.nextUrl.clone()
+        url.pathname = "/store-trial-expired"
+        return NextResponse.rewrite(url)
+      }
+    }
+    
+    if (subscriptionStatus === "expired") {
+      console.warn(`[middleware] Store ${subdomain} subscription has expired`)
+      
+      const url = request.nextUrl.clone()
+      url.pathname = "/store-subscription-expired"
       return NextResponse.rewrite(url)
     }
     

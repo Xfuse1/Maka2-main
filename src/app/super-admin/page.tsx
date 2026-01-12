@@ -23,6 +23,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { 
@@ -38,8 +44,12 @@ import {
   RefreshCw,
   Settings,
   CheckCircle,
-  XCircle
+  XCircle,
+  CreditCard,
+  Tag
 } from "lucide-react"
+import PricingManagement from "@/components/super-admin/PricingManagement"
+import SubscriptionsManagement from "@/components/super-admin/SubscriptionsManagement"
 
 interface StoreData {
   id: string
@@ -85,6 +95,7 @@ export default function SuperAdminDashboard() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [activeTab, setActiveTab] = useState("stores")
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -271,6 +282,23 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div className="container mx-auto px-6 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="stores" className="gap-2">
+              <Store className="w-4 h-4" />
+              المتاجر
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="gap-2">
+              <Tag className="w-4 h-4" />
+              الباقات
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="gap-2">
+              <CreditCard className="w-4 h-4" />
+              الاشتراكات
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="stores" className="space-y-6">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
@@ -467,6 +495,16 @@ export default function SuperAdminDashboard() {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="pricing">
+            <PricingManagement onRefresh={loadDashboardData} />
+          </TabsContent>
+
+          <TabsContent value="subscriptions">
+            <SubscriptionsManagement onRefresh={loadDashboardData} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Delete Confirmation Dialog */}
