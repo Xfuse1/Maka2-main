@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient, getStoreIdFromRequest } from '@/lib/supabase/admin'
 
 export async function GET() {
   try {
     const supabase = createAdminClient() as any
-    const { data, error } = await supabase.from('shipping_zones').select('*').order('governorate_name_en')
+    const storeId = await getStoreIdFromRequest()
+    
+    const { data, error } = await supabase
+      .from('shipping_zones')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('governorate_name_en')
+      
     if (error) {
       console.error('[admin/shipping] GET error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -20,7 +27,14 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const supabase = createAdminClient() as any
-    const { data, error } = await supabase.from('shipping_zones').insert([body]).select().single()
+    const storeId = await getStoreIdFromRequest()
+    
+    const { data, error } = await supabase
+      .from('shipping_zones')
+      .insert([{ ...body, store_id: storeId }])
+      .select()
+      .single()
+      
     if (error) {
       console.error('[admin/shipping] POST error:', error)
       return NextResponse.json({ error: error.message }, { status: 400 })
@@ -37,8 +51,21 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const { id, ...updates } = body
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    
     const supabase = createAdminClient() as any
-    const { data, error } = await supabase.from('shipping_zones').update(updates).eq('id', id).select().single()
+    const storeId = await getStoreIdFromRequest()
+    
+    // Prevent changing store_id
+    delete updates.store_id
+    
+    const { data, error } = await supabase
+      .from('shipping_zones')
+      .update(updates)
+      .eq('id', id)
+      .eq('store_id', storeId)
+      .select()
+      .single()
+      
     if (error) {
       console.error('[admin/shipping] PATCH error:', error)
       return NextResponse.json({ error: error.message }, { status: 400 })
@@ -55,8 +82,16 @@ export async function DELETE(request: Request) {
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    
     const supabase = createAdminClient() as any
-    const { error } = await supabase.from('shipping_zones').delete().eq('id', id)
+    const storeId = await getStoreIdFromRequest()
+    
+    const { error } = await supabase
+      .from('shipping_zones')
+      .delete()
+      .eq('id', id)
+      .eq('store_id', storeId)
+      
     if (error) {
       console.error('[admin/shipping] DELETE error:', error)
       return NextResponse.json({ error: error.message }, { status: 400 })

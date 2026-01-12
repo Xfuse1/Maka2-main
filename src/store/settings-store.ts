@@ -32,17 +32,17 @@ interface SettingsStore {
 }
 
 const defaultSettings: SiteSettings = {
-  siteName: "مكة",
-  siteDescription: "متجر مكة للأزياء النسائية الراقية",
-  logo: "/logo-option-4.jpg",
-  primaryColor: "#d4af37",
+  siteName: "متجرك",
+  siteDescription: "مرحباً بك في متجرنا الإلكتروني",
+  logo: "/placeholder-logo.svg",
+  primaryColor: "#3b82f6",
   secondaryColor: "#f5f5f5",
-  accentColor: "#c19a6b",
+  accentColor: "#10b981",
   backgroundColor: "#ffffff",
   textColor: "#1a1a1a",
   fontFamily: "Cairo, Arial, sans-serif",
   fontSize: "16px",
-  contactEmail: "info@mecca-fashion.com",
+  contactEmail: "info@yourstore.com",
   contactPhone: "01234567890",
   contactWhatsapp: "01234567890",
   contactAddress: "القاهرة، مصر",

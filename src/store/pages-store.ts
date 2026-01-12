@@ -28,8 +28,8 @@ const defaultPages: Omit<PageItem, "id">[] = [
     path: "/",
     title: "الصفحة الرئيسية",
     sections: [
-      { key: "hero.title", value: "مكة" },
-      { key: "hero.subtitle", value: "أزياء نسائية راقية" },
+      { key: "hero.title", value: "متجرك" },
+      { key: "hero.subtitle", value: "أفضل المنتجات بأفضل الأسعار" },
       { key: "bestsellers.title", value: "الأكثر مبيعاً" },
       { key: "bestsellers.subtitle", value: "المنتجات الأكثر طلباً من عملائنا" },
       { key: "new.title", value: "المنتجات الجديدة" },
@@ -39,10 +39,10 @@ const defaultPages: Omit<PageItem, "id">[] = [
       { key: "categories.title", value: "تسوقي حسب الفئة" },
       {
         key: "footer.about",
-        value: "متجر مكة للأزياء النسائية الراقية - نقدم لكِ أفضل التصاميم العصرية التي تجمع بين الأصالة والحداثة",
+        value: "متجرك الإلكتروني - نقدم لك أفضل المنتجات بجودة عالية وأسعار منافسة",
       },
-      { key: "footer.phone", value: "01234567890" },
-      { key: "footer.email", value: "info@mecca-fashion.com" },
+      { key: "footer.phone", value: "0100000000" },
+      { key: "footer.email", value: "info@yourstore.com" },
     ],
   },
   {
@@ -55,7 +55,7 @@ const defaultPages: Omit<PageItem, "id">[] = [
       {
         key: "story.paragraph1",
         value:
-          "بدأت رحلة مكة من حلم بسيط: توفير أزياء نسائية راقية تجمع بين الأناقة العصرية والاحتشام الأصيل. نؤمن بأن كل امرأة تستحق أن تشعر بالثقة والجمال في ملابسها، دون التنازل عن قيمها ومبادئها.",
+          "بدأت رحلتنا من حلم بسيط: توفير منتجات عالية الجودة بأسعار منافسة. نؤمن بأن كل عميل يستحق تجربة تسوق مميزة وخدمة عملاء استثنائية.",
       },
       {
         key: "story.paragraph2",
@@ -89,9 +89,9 @@ const defaultPages: Omit<PageItem, "id">[] = [
       { key: "hero.subtitle", value: "نحن هنا للإجابة على استفساراتك" },
       { key: "form.title", value: "أرسل لنا رسالة" },
       { key: "form.subtitle", value: "سنرد عليك في أقرب وقت ممكن" },
-      { key: "contact.phone", value: "01234567890" },
-      { key: "contact.whatsapp", value: "01234567890" },
-      { key: "contact.email", value: "info@mecca-fashion.com" },
+      { key: "contact.phone", value: "0100000000" },
+      { key: "contact.whatsapp", value: "0100000000" },
+      { key: "contact.email", value: "info@yourstore.com" },
       { key: "contact.address", value: "القاهرة، مصر" },
       { key: "hours.title", value: "ساعات العمل" },
       { key: "hours.weekdays", value: "السبت - الخميس: 9:00 ص - 9:00 م" },

@@ -14,13 +14,14 @@ export type ShippingZone = {
 
 export async function getAllShippingZones(): Promise<ShippingZone[]> {
   try {
-    const supabase = getSupabaseBrowserClient()
-    const { data, error } = await supabase.from("shipping_zones").select("*").order("governorate_name_en")
-    if (error) {
-      console.error("[shipping] getAllShippingZones error:", error)
+    // Use API route that filters by store_id automatically
+    const res = await fetch('/api/admin/shipping')
+    if (!res.ok) {
+      console.error("[shipping] getAllShippingZones error: HTTP", res.status)
       return []
     }
-    return (data || []) as any
+    const json = await res.json()
+    return (json.data || []) as ShippingZone[]
   } catch (err) {
     console.error("[shipping] getAllShippingZones exception:", err)
     return []
@@ -28,12 +29,16 @@ export async function getAllShippingZones(): Promise<ShippingZone[]> {
 }
 
 export async function getShippingZoneByCode(code: string) {
-  const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from("shipping_zones").select("*").eq("governorate_code", code).single()
-  if (error) {
+  try {
+    // Use API route that filters by store_id
+    const res = await fetch('/api/admin/shipping')
+    if (!res.ok) return null
+    const json = await res.json()
+    const zones = json.data || []
+    return zones.find((z: ShippingZone) => z.governorate_code === code) || null
+  } catch {
     return null
   }
-  return data as ShippingZone
 }
 
 export async function createShippingZone(zone: Partial<ShippingZone>) {

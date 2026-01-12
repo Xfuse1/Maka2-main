@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export const dynamic = "force-dynamic"
 
@@ -16,10 +16,12 @@ export async function GET(req: NextRequest) {
     if (!q) return json({ error: "missing query param q" }, 400)
 
     const admin = createAdminClient()
-    // Exact match on email or phone
+    const storeId = await getStoreIdFromRequest()
+    
     const { data, error } = await admin
       .from("orders")
       .select("*")
+      .eq("store_id", storeId)
       .or(`customer_email.eq.${q},customer_phone.eq.${q}`)
       .order("created_at", { ascending: false })
 

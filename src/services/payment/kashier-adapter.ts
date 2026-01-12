@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getKashierConfig } from "./kashier-config";
+import { getKashierConfigFromEnv, type KashierConfig } from "./kashier-config";
 
 export interface KashierPaymentParams {
   orderId: string;
@@ -7,6 +7,7 @@ export interface KashierPaymentParams {
   currency?: string;
   customerEmail: string;
   customerName: string;
+  storeId?: string; // NEW: Store ID for multi-tenant support
 }
 
 export interface KashierPaymentResult {
@@ -29,25 +30,29 @@ export interface KashierWebhookPayload {
   [key: string]: any;
 }
 
+/**
+ * Build Kashier payment URL with provided config
+ * This allows passing store-specific config instead of using global env vars
+ */
 export function buildKashierPaymentUrl(
-  params: KashierPaymentParams
+  params: KashierPaymentParams,
+  config?: KashierConfig
 ): KashierPaymentResult {
-  const config = getKashierConfig();
+  // Use provided config or fallback to environment variables
+  const kashierConfig = config || getKashierConfigFromEnv();
 
   const orderId = params.orderId;
   const formattedAmount = Number(params.amount).toFixed(2);
   const currency = (params.currency || "EGP").toUpperCase();
 
-  // IMPORTANT:
-  // Use API KEY for signing (this matches the old working implementation).
-  // apiSecret can be kept for webhooks, but not used here.
-  const signingKey = config.apiKey;
+  // Use API KEY for signing
+  const signingKey = kashierConfig.apiKey;
   if (!signingKey) {
     throw new Error("No Kashier API key configured");
   }
 
-  // This path format MUST match the original working code:
-  const path = `/?payment=${config.merchantId}.${orderId}.${formattedAmount}.${currency}`;
+  // Path format for hash generation
+  const path = `/?payment=${kashierConfig.merchantId}.${orderId}.${formattedAmount}.${currency}`;
 
   const hash = crypto
     .createHmac("sha256", signingKey)
@@ -55,19 +60,19 @@ export function buildKashierPaymentUrl(
     .digest("hex");
 
   const successUrl = encodeURIComponent(
-    `${config.appUrl}/order-success?orderId=${orderId}`
+    `${kashierConfig.appUrl}/order-success?orderId=${orderId}`
   );
   const failureUrl = encodeURIComponent(
-    `${config.appUrl}/payment/cancel?orderId=${orderId}`
+    `${kashierConfig.appUrl}/payment/cancel?orderId=${orderId}`
   );
   const webhookUrl = encodeURIComponent(
-    `${config.appUrl}/api/payment/webhook`
+    `${kashierConfig.appUrl}/api/payment/webhook`
   );
 
   const paymentUrl =
-    `${config.baseUrl}/?merchantId=${config.merchantId}` +
+    `${kashierConfig.baseUrl}/?merchantId=${kashierConfig.merchantId}` +
     `&orderId=${orderId}` +
-    `&mode=${config.mode}` +
+    `&mode=${kashierConfig.mode}` +
     `&amount=${formattedAmount}` +
     `&currency=${currency}` +
     `&hash=${hash}` +
@@ -86,10 +91,12 @@ export function verifyKashierWebhookSignature(
   rawBody: string,
   signature: string,
   timestamp: string,
+  config?: KashierConfig,
   options?: { toleranceSeconds?: number }
 ): boolean {
-  const config = getKashierConfig();
-  const signingKey = config.apiSecret ?? config.apiKey;
+  // Use provided config or fallback to environment variables
+  const kashierConfig = config || getKashierConfigFromEnv();
+  const signingKey = kashierConfig.apiSecret ?? kashierConfig.apiKey;
   if (!signingKey) {
     console.error("[KashierAdapter] No signing key configured");
     return false;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 const ALLOWED_STATUSES = new Set(["pending", "processing", "shipped", "delivered", "cancelled", "confirmed"])
 
@@ -20,11 +20,13 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
-    // get last orders by created_at
+    // Get last orders by created_at for this store
     const { data: lastOrders, error: selectErr } = await supabase
       .from("orders")
       .select("id")
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false })
       .limit(count)
 
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
       .from("orders") as any)
       .update({ status })
       .in("id", ids)
+      .eq("store_id", storeId)
 
     if (updateErr) {
       console.error('[update-last] update error', updateErr)

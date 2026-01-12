@@ -1,4 +1,4 @@
-// Database Types for Mecca Fashion Store
+// Database Types for E-commerce Store
 
 export interface ProductColor {
   name: string

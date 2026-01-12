@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
-// GET - Fetch paginated products with filtering
+// GET - Fetch paginated products with filtering (filtered by store)
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -12,15 +12,13 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit
 
     const supabase = createAdminClient()
-    
+    const storeId = await getStoreIdFromRequest()
+
+    // Build base query for products with category
     let query = supabase
       .from("products")
-      .select(`
-        *,
-        category:categories(name_ar, name_en),
-        product_images!inner(id, image_url, alt_text_ar, display_order, is_primary),
-        product_variants(id, name_ar, name_en, size, color, color_hex, price, inventory_quantity, sku)
-      `, { count: 'exact' })
+      .select("*, category:categories(name_ar, name_en)", { count: 'exact' })
+      .eq('store_id', storeId)
 
     // Apply filters
     if (categoryId) {
@@ -31,7 +29,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply pagination
-    const { data, error, count } = await query
+    const { data: products, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
@@ -39,8 +37,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ 
-      data, 
+    if (!products || products.length === 0) {
+      return NextResponse.json({
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 }
+      }, { status: 200 })
+    }
+
+    // Fetch images and variants separately (workaround for partitioned tables)
+    const productIds = products.map((p: { id: string }) => p.id)
+    const [imagesResult, variantsResult] = await Promise.all([
+      supabase
+        .from("product_images")
+        .select("id, product_id, image_url, alt_text_ar, display_order, is_primary")
+        .in("product_id", productIds)
+        .order("display_order", { ascending: true }),
+      supabase
+        .from("product_variants")
+        .select("id, product_id, name_ar, name_en, size, color, color_hex, price, inventory_quantity, sku")
+        .in("product_id", productIds)
+    ])
+
+    type ImageRow = { id: string; product_id: string; image_url: string; alt_text_ar: string | null; display_order: number; is_primary: boolean }
+    type VariantRow = { id: string; product_id: string; name_ar: string; name_en: string | null; size: string | null; color: string | null; color_hex: string | null; price: number; inventory_quantity: number; sku: string | null }
+
+    const images = (imagesResult.data || []) as ImageRow[]
+    const variants = (variantsResult.data || []) as VariantRow[]
+
+    // Attach images and variants to products
+    const data = products.map((p: { id: string }) => ({
+      ...p,
+      product_images: images.filter(img => img.product_id === p.id),
+      product_variants: variants.filter(v => v.product_id === p.id)
+    }))
+
+    return NextResponse.json({
+      data,
       pagination: {
         page,
         limit,

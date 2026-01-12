@@ -3,7 +3,7 @@
 // POST /api/orders/create
 
 import { NextResponse, type NextRequest } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest, DEFAULT_STORE_ID } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic" // تأكد أنه سيرفر-سايد دائمًا
@@ -89,6 +89,7 @@ export async function GET() {
 // ===== Handler =====
 export async function POST(req: NextRequest) {
   const supabase = createAdminClient() as any
+  const storeId = await getStoreIdFromRequest()
 
   // Get logged in user if any
   let userId = null
@@ -305,11 +306,16 @@ export async function POST(req: NextRequest) {
     // We'll set calculatedTotal to finalTotal for insertion
     const finalTotalNumber = Number(finalTotal)
 
-    // Upsert customer
+    // Upsert customer (with store_id)
     const { data: customerRow, error: upsertErr } = await supabase
       .from("customers")
       .upsert(
-        { email: customerEmail, full_name: customerName, phone: body.customerPhone ?? null },
+        { 
+          store_id: storeId, // Add store_id for multi-tenant
+          email: customerEmail, 
+          full_name: customerName, 
+          phone: body.customerPhone ?? null 
+        },
         { onConflict: "email" },
       )
       .select("id")
@@ -327,10 +333,11 @@ export async function POST(req: NextRequest) {
 
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 9).toUpperCase()}`
 
-    // Insert order (use server computed shippingCost if available)
+    // Insert order (with store_id for multi-tenant)
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
+        store_id: storeId, // Add store_id for multi-tenant
         user_id: userId,
         order_number: orderNumber,
         customer_id: customerRow?.id ?? null,
@@ -371,13 +378,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Insert order items (best-effort)
+    // Insert order items (best-effort with store_id)
     const preparedItems = (items || [])
       .map((it) => {
         const qty = toNum(it.quantity, 1)
         const unit = toNum(it.unitPrice, 0)
         const line = toNum(it.totalPrice, unit * qty)
         return {
+          store_id: storeId, // Add store_id for multi-tenant
           order_id: order.id,
           product_id: it.productId ?? null,
           variant_id: it.variantId ?? null,

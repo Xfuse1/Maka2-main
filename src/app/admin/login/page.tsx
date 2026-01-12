@@ -25,26 +25,63 @@ export default function AdminLoginPage() {
 
     try {
       const supabase = getSupabaseBrowserClient()
+      
+      console.log("🔐 [LOGIN] Starting authentication...")
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
-      if (authError) throw authError
-      if (!authData.user) throw new Error("فشل تسجيل الدخول")
+      if (authError) {
+        console.error("❌ [LOGIN] Auth error:", authError)
+        throw authError
+      }
+      if (!authData.user) {
+        console.error("❌ [LOGIN] No user data returned")
+        throw new Error("فشل تسجيل الدخول")
+      }
 
-      const { data: profile } = await supabase
+      console.log("✅ [LOGIN] Auth successful, user ID:", authData.user.id)
+      console.log("🔍 [LOGIN] Fetching profile for user:", authData.user.id)
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", authData.user.id)
-        .single() as { data: { role: string } | null }
+        .single() as { data: { role: string } | null, error: any }
+
+      console.log("📊 [LOGIN] Profile query result:", { profile, profileError })
+
+      if (profileError) {
+        console.error("❌ [LOGIN] Profile error:", profileError)
+        console.error("❌ [LOGIN] Error details:", JSON.stringify(profileError, null, 2))
+        throw new Error(`خطأ في جلب بيانات المستخدم: ${profileError.message || profileError.code}`)
+      }
+
+      if (!profile) {
+        console.error("❌ [LOGIN] No profile found for user")
+        throw new Error("لم يتم العثور على بيانات المستخدم")
+      }
+
+      console.log("✅ [LOGIN] Profile found, role:", profile.role)
 
       if (profile?.role !== "admin") {
+        console.warn("⚠️ [LOGIN] User is not admin, role:", profile.role)
         await supabase.auth.signOut()
         throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
       }
 
+      // Clear user-specific cache on successful login
+      try {
+        const { clearUserCacheOnLogin } = await import("@/lib/client/clearClientData")
+        await clearUserCacheOnLogin()
+      } catch (e) {
+        // Best effort - ignore errors
+      }
+
+      console.log("🎉 [LOGIN] Admin login successful!")
       toast({ title: "تم تسجيل الدخول", description: "مرحباً بك في لوحة التحكم" })
       router.push("/admin")
       router.refresh()
     } catch (error: any) {
+      console.error("💥 [LOGIN] Final error:", error)
       toast({
         title: "خطأ",
         description: error.message || "فشل تسجيل الدخول",

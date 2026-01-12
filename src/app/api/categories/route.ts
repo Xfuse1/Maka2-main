@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server"
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
-// GET - Fetch all active categories for public display
+// GET - Fetch all active categories for public display (filtered by store)
 export async function GET() {
   try {
-    const supabase = getSupabaseBrowserClient()
+    const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
     const { data, error } = await supabase
       .from("categories")
       .select("*")
+      .eq("store_id", storeId) // Filter by store for multi-tenant
       .eq("is_active", true)
       .order("display_order", { ascending: true })
       .order("name_ar", { ascending: true })

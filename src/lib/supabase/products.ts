@@ -358,14 +358,10 @@ export async function getAllCategories() {
 export async function searchProducts(query: string) {
   const supabase = getSupabaseBrowserClient()
 
-  const { data, error } = await supabase
+  // Fetch products with category
+  const { data: products, error } = await supabase
     .from("products")
-    .select(`
-      *,
-      category:categories(name_ar, name_en),
-      product_images(*),
-      product_variants(*)
-    `)
+    .select("*, category:categories(name_ar, name_en)")
     .or(`name_ar.ilike.%${query}%,name_en.ilike.%${query}%`)
     .order("created_at", { ascending: false })
 
@@ -373,6 +369,24 @@ export async function searchProducts(query: string) {
     console.error("[v0] Error searching products:", error)
     throw error
   }
+
+  if (!products || products.length === 0) {
+    return [] as ProductWithDetails[]
+  }
+
+  // Fetch images and variants separately (workaround for partitioned tables)
+  const productIds = products.map((p: { id: string }) => p.id)
+  const [imagesResult, variantsResult] = await Promise.all([
+    supabase.from("product_images").select("*").in("product_id", productIds),
+    supabase.from("product_variants").select("*").in("product_id", productIds)
+  ])
+
+  // Attach images and variants to products
+  const data = products.map((p: { id: string }) => ({
+    ...p,
+    product_images: (imagesResult.data || []).filter((img: { product_id: string }) => img.product_id === p.id),
+    product_variants: (variantsResult.data || []).filter((v: { product_id: string }) => v.product_id === p.id)
+  }))
 
   return data as ProductWithDetails[]
 }

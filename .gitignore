@@ -40,3 +40,6 @@ yarn-error.log*
 /reports/*.md
 !/reports/.gitkeep
 
+
+.vercel
+.env*.local

@@ -38,6 +38,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
+        hostname: 'ozlvlzmyceuefygvehmh.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'tpkfgimtgduiiiscdqyq.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
@@ -49,6 +54,11 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'fmeeioiajtyfvfa.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'dowvlportioymixpsnie.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
       // Allow externally hosted images from i.postimg.cc (used by some test content)
@@ -98,7 +108,7 @@ nextConfig.headers = async () => {
   const devCSP =
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net; " +
-    "connect-src 'self' https://tpkfgimtgduiiiscdqyq.supabase.co wss://tpkfgimtgduiiiscdqyq.supabase.co https://bbzjxcjfmeoiojjnfvfa.supabase.co wss://bbzjxcjfmeoiojjnfvfa.supabase.co http://localhost:* ws://localhost:* https://connect.facebook.net https://www.facebook.com https://signals.birchub.events https://7pdiumnsps.us-east-2.awsapprunner.com; " +
+    "connect-src 'self' https://ozlvlzmyceuefygvehmh.supabase.co wss://ozlvlzmyceuefygvehmh.supabase.co https://tpkfgimtgduiiiscdqyq.supabase.co wss://tpkfgimtgduiiiscdqyq.supabase.co https://bbzjxcjfmeoiojjnfvfa.supabase.co wss://bbzjxcjfmeoiojjnfvfa.supabase.co https://dowvlportioymixpsnie.supabase.co wss://dowvlportioymixpsnie.supabase.co http://localhost:* ws://localhost:* https://connect.facebook.net https://www.facebook.com https://signals.birchub.events https://7pdiumnsps.us-east-2.awsapprunner.com; " +
     "img-src 'self' data: blob: https: https://www.facebook.com; " +
     "style-src 'self' 'unsafe-inline'; " +
     "font-src 'self' data:;";
@@ -108,7 +118,7 @@ nextConfig.headers = async () => {
   const prodCSP =
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net; " +
-    "connect-src 'self' https://tpkfgimtgduiiiscdqyq.supabase.co wss://tpkfgimtgduiiiscdqyq.supabase.co https://bbzjxcjfmeoiojjnfvfa.supabase.co wss://bbzjxcjfmeoiojjnfvfa.supabase.co https://connect.facebook.net https://www.facebook.com https://signals.birchub.events https://7pdiumnsps.us-east-2.awsapprunner.com; " +
+    "connect-src 'self' https://ozlvlzmyceuefygvehmh.supabase.co wss://ozlvlzmyceuefygvehmh.supabase.co https://tpkfgimtgduiiiscdqyq.supabase.co wss://tpkfgimtgduiiiscdqyq.supabase.co https://bbzjxcjfmeoiojjnfvfa.supabase.co wss://bbzjxcjfmeoiojjnfvfa.supabase.co https://dowvlportioymixpsnie.supabase.co wss://dowvlportioymixpsnie.supabase.co https://connect.facebook.net https://www.facebook.com https://signals.birchub.events https://7pdiumnsps.us-east-2.awsapprunner.com; " +
     "img-src 'self' data: blob: https: https://www.facebook.com; " +
     "style-src 'self' 'unsafe-inline'; " +
     "font-src 'self' data:;";

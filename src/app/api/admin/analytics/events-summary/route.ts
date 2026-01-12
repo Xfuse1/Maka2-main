@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,13 +8,15 @@ export async function GET(request: NextRequest) {
     const toParam = searchParams.get("to")
 
     const to = toParam ? new Date(toParam) : new Date()
-    const from = fromParam ? new Date(fromParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Default 30 days
+    const from = fromParam ? new Date(fromParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
     const { data, error } = await supabase
       .from("analytics_events")
       .select("event_name, created_at")
+      .eq("store_id", storeId)
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .order("created_at", { ascending: true })

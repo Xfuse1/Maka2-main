@@ -9,6 +9,7 @@ const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|web
 const PUBLIC_PATHS = new Set([
   "/admin/login",
   "/admin/signup",
+  "/create-store",
 ])
 
 // Public API paths for GET requests
@@ -17,8 +18,19 @@ const PUBLIC_GET_API_PATHS = new Set([
   "/api/admin/design/logo",
 ])
 
+// Public API paths for POST requests (special endpoints)
+const PUBLIC_POST_API_PATHS = new Set([
+  "/api/admin/users/create-admin",  // Admin signup with secret code
+  "/api/admin/cache",               // Cache invalidation
+])
+
+// Platform domain (التغيير حسب الدومين الفعلي)
+const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
+const ENABLE_MULTI_TENANT = process.env.NEXT_PUBLIC_ENABLE_MULTI_TENANT === "true"
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const hostname = request.headers.get("host") || ""
 
   // Fast path: Skip static files and public routes early (most common case)
   // This check is optimized to return immediately for most requests
@@ -32,6 +44,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // =============================================================================
+  // SUBDOMAIN ROUTING - Multi-Tenant Support
+  // =============================================================================
+  
+  if (ENABLE_MULTI_TENANT) {
+    // استخراج subdomain من hostname
+    // مثال: store1.makastore.com -> store1
+    const subdomain = extractSubdomain(hostname, PLATFORM_DOMAIN)
+    
+    if (subdomain && subdomain !== "www" && subdomain !== "admin") {
+      // هذا طلب لمتجر فرعي (subdomain)
+      return handleStoreSubdomain(request, subdomain)
+    }
+  }
+  
+  // =============================================================================
+  // ADMIN & PLATFORM ROUTES
+  // =============================================================================
+
   // Fast path: Allow public auth pages (no DB query needed)
   if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next()
@@ -39,6 +70,11 @@ export async function middleware(request: NextRequest) {
 
   // Fast path: Allow public GET API endpoints
   if (PUBLIC_GET_API_PATHS.has(pathname) && request.method === "GET") {
+    return NextResponse.next()
+  }
+
+  // Fast path: Allow public POST API endpoints (with their own auth like secret codes)
+  if (PUBLIC_POST_API_PATHS.has(pathname) && request.method === "POST") {
     return NextResponse.next()
   }
 
@@ -90,18 +126,26 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // التحقق من صلاحيات الـ admin
+    // التحقق من صلاحيات الـ admin أو store_owner
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, store_id")
       .eq("id", user.id)
       .single()
 
-    if (!profile || profile.role !== "admin") {
-      // ليس admin - إعادة توجيه لصفحة تسجيل الدخول
+    // السماح لـ admin و store_owner فقط
+    const allowedRoles = ["admin", "store_owner"]
+    if (!profile || !allowedRoles.includes(profile.role)) {
+      // ليس admin أو store_owner - إعادة توجيه لصفحة تسجيل الدخول
       const url = request.nextUrl.clone()
       url.pathname = "/admin/login"
       return NextResponse.redirect(url)
+    }
+
+    // إضافة معلومات الدور والمتجر للـ headers
+    response.headers.set("x-user-role", profile.role)
+    if (profile.store_id) {
+      response.headers.set("x-user-store-id", profile.store_id)
     }
 
     return response
@@ -135,13 +179,23 @@ export async function middleware(request: NextRequest) {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, store_id")
         .eq("id", user.id)
         .single()
 
-      if (!profile || profile.role !== "admin") {
+      // السماح لـ admin و store_owner فقط
+      const allowedRoles = ["admin", "store_owner"]
+      if (!profile || !allowedRoles.includes(profile.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
+
+      // إضافة معلومات الدور والمتجر للـ headers للـ APIs
+      const response = NextResponse.next()
+      response.headers.set("x-user-role", profile.role)
+      if (profile.store_id) {
+        response.headers.set("x-user-store-id", profile.store_id)
+      }
+      return response
 
       return NextResponse.next()
     } catch (e) {
@@ -153,15 +207,157 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next()
 }
 
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * استخراج subdomain من hostname
+ * @param hostname - مثال: store1.makastore.com أو store1.localhost:3000
+ * @param platformDomain - مثال: makastore.com أو localhost
+ * @returns subdomain أو null
+ */
+function extractSubdomain(hostname: string, platformDomain: string): string | null {
+  // إزالة port إن وجد
+  const hostWithoutPort = hostname.split(":")[0]
+  
+  // التعامل مع localhost بشكل خاص
+  if (platformDomain === "localhost") {
+    // مثال: store1.localhost -> store1
+    if (hostWithoutPort.endsWith(".localhost")) {
+      const subdomain = hostWithoutPort.replace(".localhost", "")
+      if (subdomain && subdomain !== "www") {
+        return subdomain
+      }
+    }
+    return null
+  }
+  
+  // في حالة الدومين العادي (production)
+  if (hostWithoutPort === "localhost" || hostWithoutPort === "127.0.0.1") {
+    return null
+  }
+  
+  // إزالة www. إن وجد
+  const cleanHost = hostWithoutPort.replace(/^www\./, "")
+  
+  // التحقق من أن hostname ينتهي بالـ platform domain
+  if (!cleanHost.endsWith(platformDomain)) {
+    return null
+  }
+  
+  // استخراج subdomain
+  const subdomain = cleanHost.replace(`.${platformDomain}`, "")
+  
+  // إذا كان subdomain فارغ أو يساوي platform domain، يعني نحن على الدومين الرئيسي
+  if (!subdomain || subdomain === platformDomain) {
+    return null
+  }
+  
+  return subdomain
+}
+
+/**
+ * معالجة طلبات المتاجر الفرعية (subdomains)
+ */
+async function handleStoreSubdomain(request: NextRequest, subdomain: string) {
+  const { pathname, search } = request.nextUrl
+  
+  // إنشاء Supabase client للتحقق من المتجر
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll() {
+          // noop for middleware
+        },
+      },
+    }
+  )
+  
+  try {
+    // البحث عن المتجر في قاعدة البيانات
+    const { data: store, error } = await supabase
+      .from("stores")
+      .select("id, store_name, status, subdomain, slug, primary_color, secondary_color, logo_url")
+      .eq("subdomain", subdomain)
+      .single()
+    
+    // إذا لم يوجد المتجر أو حدث خطأ
+    if (error || !store) {
+      console.error(`[middleware] Store not found for subdomain: ${subdomain}`, error)
+      
+      // إعادة توجيه لصفحة 404 مخصصة للمتاجر غير الموجودة
+      const url = request.nextUrl.clone()
+      url.pathname = "/store-not-found"
+      return NextResponse.rewrite(url)
+    }
+    
+    // التحقق من حالة المتجر
+    if (store.status !== "active") {
+      console.warn(`[middleware] Store ${subdomain} is not active. Status: ${store.status}`)
+      
+      const url = request.nextUrl.clone()
+      if (store.status === "suspended") {
+        url.pathname = "/store-suspended"
+      } else if (store.status === "cancelled") {
+        url.pathname = "/store-cancelled"
+      } else {
+        url.pathname = "/store-pending"
+      }
+      return NextResponse.rewrite(url)
+    }
+    
+    // إعادة توجيه /auth إلى /store-auth للمتاجر الفرعية
+    if (pathname === "/auth" || pathname === "/auth/") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/store-auth"
+      return NextResponse.rewrite(url)
+    }
+    
+    // المتجر موجود ونشط - إضافة معلومات المتجر للـ headers
+    const response = NextResponse.next()
+    response.headers.set("x-store-id", store.id)
+    response.headers.set("x-store-subdomain", store.subdomain)
+    response.headers.set("x-store-slug", store.slug)
+    response.headers.set("x-store-name", encodeURIComponent(store.store_name))
+    
+    // إضافة ألوان المتجر للتخصيص
+    if (store.primary_color) {
+      response.headers.set("x-store-primary-color", store.primary_color)
+    }
+    if (store.secondary_color) {
+      response.headers.set("x-store-secondary-color", store.secondary_color)
+    }
+    if (store.logo_url) {
+      response.headers.set("x-store-logo-url", store.logo_url)
+    }
+    
+    console.log(`[middleware] Store found: ${store.store_name} (${subdomain}) - ID: ${store.id}`)
+    
+    return response
+    
+  } catch (error) {
+    console.error(`[middleware] Error fetching store for subdomain ${subdomain}:`, error)
+    
+    // في حالة الخطأ، نسمح بالمتابعة لكن بدون معلومات المتجر
+    return NextResponse.next()
+  }
+}
+
 export const config = {
   matcher: [
     /*
      * Optimized matcher - only match routes that need middleware processing:
      * - /admin/* (admin pages that need auth)
      * - /api/admin/* (admin API routes that need auth)
+     * - All other routes for subdomain detection
      * Excludes all static files and public routes for better performance
      */
-    "/admin/:path*",
-    "/api/admin/:path*",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 }

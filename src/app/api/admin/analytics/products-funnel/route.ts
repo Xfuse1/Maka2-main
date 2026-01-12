@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,11 +11,13 @@ export async function GET(request: NextRequest) {
     const from = fromParam ? new Date(fromParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
     // 1. Fetch Analytics Events (Views, AddToCart, Checkout)
     const { data: events, error: eventsError } = await supabase
       .from("analytics_events")
       .select("event_name, product_id")
+      .eq("store_id", storeId)
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .not("product_id", "is", null)
@@ -23,10 +25,10 @@ export async function GET(request: NextRequest) {
     if (eventsError) throw eventsError
 
     // 2. Fetch Actual Purchases from order_items
-    // Use inner join on orders to filter out cancelled/returned
     const { data: purchaseItems, error: purchasesError } = await supabase
       .from("order_items")
-      .select("product_id, quantity, orders!inner(status)")
+      .select("product_id, quantity, orders!inner(status, store_id)")
+      .eq("orders.store_id", storeId)
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .not("orders.status", "in", '("cancelled","returned","refunded")')

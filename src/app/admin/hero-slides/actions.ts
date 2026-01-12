@@ -6,8 +6,18 @@ import {
   createHeroSlide,
   updateHeroSlide,
   deleteHeroSlide,
-  type HeroSlide,
-} from "@/lib/supabase/homepage"
+} from "@/lib/supabase/homepage-admin"
+import type { HeroSlide } from "@/lib/supabase/homepage"
+import { invalidateHeroSlidesCache } from "@/lib/cache/homepage-cache"
+import { DEFAULT_STORE_ID, getStoreIdFromRequest } from "@/lib/supabase/admin"
+
+async function getStoreId(): Promise<string> {
+  try {
+    return await getStoreIdFromRequest()
+  } catch {
+    return DEFAULT_STORE_ID
+  }
+}
 
 export async function getHeroSlidesAction() {
   try {
@@ -22,6 +32,8 @@ export async function getHeroSlidesAction() {
 export async function createHeroSlideAction(slide: Omit<HeroSlide, "id" | "created_at" | "updated_at">) {
   try {
     const data = await createHeroSlide(slide)
+    const storeId = await getStoreId()
+    invalidateHeroSlidesCache(storeId)
     revalidatePath("/")
     revalidatePath("/admin/hero-slides")
     return { success: true, data }
@@ -34,6 +46,8 @@ export async function createHeroSlideAction(slide: Omit<HeroSlide, "id" | "creat
 export async function updateHeroSlideAction(id: string, updates: Partial<HeroSlide>) {
   try {
     const data = await updateHeroSlide(id, updates)
+    const storeId = await getStoreId()
+    invalidateHeroSlidesCache(storeId)
     revalidatePath("/")
     revalidatePath("/admin/hero-slides")
     return { success: true, data }
@@ -46,6 +60,8 @@ export async function updateHeroSlideAction(id: string, updates: Partial<HeroSli
 export async function deleteHeroSlideAction(id: string) {
   try {
     await deleteHeroSlide(id)
+    const storeId = await getStoreId()
+    invalidateHeroSlidesCache(storeId)
     revalidatePath("/")
     revalidatePath("/admin/hero-slides")
     return { success: true }

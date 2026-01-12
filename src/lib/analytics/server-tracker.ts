@@ -1,4 +1,4 @@
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest, DEFAULT_STORE_ID } from "@/lib/supabase/admin"
 
 export type AnalyticsEventName =
   | "PageView"
@@ -14,6 +14,7 @@ export interface BaseAnalyticsPayload {
   pageUrl?: string | null
   referrer?: string | null
   sessionId?: string | null
+  storeId?: string | null // Optional: can be passed explicitly
 }
 
 export interface ProductAnalyticsPayload {
@@ -42,11 +43,22 @@ export async function trackServerEvent(
 ) {
   // Use 'any' cast for supabase client to avoid strict type checks on insert if types are not fully propagated yet
   const supabase: any = getSupabaseAdminClient()
+  
+  // Get store_id from payload or from request headers
+  let storeId = payload.storeId
+  if (!storeId) {
+    try {
+      storeId = await getStoreIdFromRequest()
+    } catch {
+      storeId = DEFAULT_STORE_ID
+    }
+  }
 
   const { error } = await supabase
     .from("analytics_events")
     .insert([
       {
+        store_id: storeId, // Add store_id for multi-tenant
         event_name: eventName,
         user_id: payload.userId ?? null,
         user_name: payload.userName ?? null,

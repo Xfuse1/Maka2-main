@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+// Secret code for admin creation - matches the one in signup page
+const ADMIN_SECRET_CODE = process.env.ADMIN_SECRET_CODE || "mecca-admin-2024"
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName } = await request.json()
+    const { email, password, fullName, secretCode } = await request.json()
+
+    // Verify secret code first (security check)
+    if (!secretCode || secretCode !== ADMIN_SECRET_CODE) {
+      return NextResponse.json({ error: "الكود السري غير صحيح" }, { status: 403 })
+    }
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
@@ -22,6 +30,8 @@ export async function POST(request: NextRequest) {
     // Use the admin client from lib
     const supabaseAdmin = createAdminClient()
 
+    console.log("[CREATE-ADMIN] Starting user creation for:", email)
+
     // إنشاء المستخدم
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -31,29 +41,43 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) {
+      console.error("[CREATE-ADMIN] Auth error:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // إنشاء profile مع role = admin
-    if (data.user) {
-      const profilePayload = {
-        id: data.user.id,
-        name: fullName,
-        role: "admin",
-      } as any
-
-      const { data: profileData, error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .upsert(profilePayload)
-        .select()
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError)
-        return NextResponse.json({ error: profileError.message }, { status: 500 })
-      }
+    if (!data.user) {
+      console.error("[CREATE-ADMIN] No user returned from createUser")
+      return NextResponse.json({ error: "فشل إنشاء المستخدم" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[CREATE-ADMIN] User created successfully:", data.user.id)
+
+    // إنشاء profile مع role = admin
+    const profilePayload = {
+      id: data.user.id,
+      name: fullName,
+      role: "admin",
+    } as any
+
+    console.log("[CREATE-ADMIN] Creating profile with payload:", profilePayload)
+
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(profilePayload)
+      .select()
+
+    if (profileError) {
+      console.error("[CREATE-ADMIN] Profile creation error:", profileError)
+      // Don't fail - the user exists, they just need to create profile manually
+      return NextResponse.json({ 
+        success: true, 
+        warning: "تم إنشاء المستخدم ولكن فشل إنشاء الملف الشخصي: " + profileError.message 
+      })
+    }
+
+    console.log("[CREATE-ADMIN] Profile created successfully:", profileData)
+
+    return NextResponse.json({ success: true, userId: data.user.id })
   } catch (error: any) {
     console.error("Error creating admin:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })

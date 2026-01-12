@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase Connection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: 'Cairo', Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            direction: rtl;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        button {
+            background: #760614;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #a13030;
+        }
+        pre {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 اختبار اتصال Supabase</h1>
+    
+    <div class="test-section">
+        <h2>1️⃣ متغيرات البيئة</h2>
+        <div id="env-test">جاري التحقق...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>2️⃣ اختبار الاتصال</h2>
+        <button onclick="testConnection()">اختبار الاتصال</button>
+        <div id="connection-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3️⃣ اختبار قراءة البيانات</h2>
+        <button onclick="testStores()">اختبار Stores</button>
+        <button onclick="testProducts()">اختبار Products</button>
+        <button onclick="testSettings()">اختبار Settings</button>
+        <div id="data-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4️⃣ اختبار تسجيل الدخول</h2>
+        <input type="email" id="email" placeholder="Email" value="admin@makastore.com">
+        <input type="password" id="password" placeholder="Password" value="Admin@123456">
+        <button onclick="testLogin()">تسجيل الدخول</button>
+        <div id="login-test"></div>
+    </div>
+
+    <script>
+        // استبدل هذه القيم بالقيم من .env.local
+        const SUPABASE_URL = 'https://ozlvlzmyceuefygvehmh.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96bHZsem15Y2V1ZWZ5Z3ZlaG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4NDc1MjEsImV4cCI6MjA4MzQyMzUyMX0.AYIM-xJLl9Qyj0a8C9_APvpCHA0f6oY0skvbvPGLoqQ';
+
+        let supabaseClient;
+
+        // اختبار متغيرات البيئة
+        function testEnv() {
+            const envDiv = document.getElementById('env-test');
+            let html = '';
+
+            if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+                html += '<p class="success">✅ المتغيرات موجودة</p>';
+                html += `<pre>URL: ${SUPABASE_URL}</pre>`;
+                html += `<pre>Key: ${SUPABASE_ANON_KEY.substring(0, 50)}...</pre>`;
+                
+                // إنشاء Supabase client
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                html += '<p class="success">✅ تم إنشاء Supabase client</p>';
+            } else {
+                html += '<p class="error">❌ المتغيرات غير موجودة</p>';
+            }
+
+            envDiv.innerHTML = html;
+        }
+
+        // اختبار الاتصال
+        async function testConnection() {
+            const div = document.getElementById('connection-test');
+            div.innerHTML = '<p>جاري الاختبار...</p>';
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('stores')
+                    .select('count')
+                    .limit(1);
+
+                if (error) {
+                    div.innerHTML = `<p class="error">❌ خطأ في الاتصال:</p><pre>${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    div.innerHTML = '<p class="success">✅ الاتصال ناجح!</p>';
+                }
+            } catch (err) {
+                div.innerHTML = `<p class="error">❌ خطأ:</p><pre>${err.message}</pre>`;
+            }
+        }
+
+        // اختبار Stores
+        async function testStores() {
+            const div = document.getElementById('data-test');
+            div.innerHTML = '<p>جاري اختبار Stores...</p>';
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('stores')
+                    .select('*')
+                    .limit(5);
+
+                if (error) {
+                    div.innerHTML = `<p class="error">❌ خطأ في Stores:</p><pre>${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    div.innerHTML = `<p class="success">✅ نجح! عدد المتاجر: ${data?.length || 0}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (err) {
+                div.innerHTML = `<p class="error">❌ خطأ:</p><pre>${err.message}</pre>`;
+            }
+        }
+
+        // اختبار Products
+        async function testProducts() {
+            const div = document.getElementById('data-test');
+            div.innerHTML = '<p>جاري اختبار Products...</p>';
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('products')
+                    .select('*')
+                    .limit(5);
+
+                if (error) {
+                    div.innerHTML = `<p class="error">❌ خطأ في Products:</p><pre>${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    div.innerHTML = `<p class="success">✅ نجح! عدد المنتجات: ${data?.length || 0}</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (err) {
+                div.innerHTML = `<p class="error">❌ خطأ:</p><pre>${err.message}</pre>`;
+            }
+        }
+
+        // اختبار Settings
+        async function testSettings() {
+            const div = document.getElementById('data-test');
+            div.innerHTML = '<p>جاري اختبار Settings...</p>';
+
+            try {
+                const { data: storeSettings, error: storeError } = await supabaseClient
+                    .from('store_settings')
+                    .select('*')
+                    .limit(1)
+                    .single();
+
+                const { data: designSettings, error: designError } = await supabaseClient
+                    .from('design_settings')
+                    .select('*')
+                    .limit(1)
+                    .single();
+
+                let html = '';
+
+                if (storeError) {
+                    html += `<p class="error">❌ خطأ في Store Settings:</p><pre>${JSON.stringify(storeError, null, 2)}</pre>`;
+                } else {
+                    html += `<p class="success">✅ Store Settings:</p><pre>${JSON.stringify(storeSettings, null, 2)}</pre>`;
+                }
+
+                if (designError) {
+                    html += `<p class="error">❌ خطأ في Design Settings:</p><pre>${JSON.stringify(designError, null, 2)}</pre>`;
+                } else {
+                    html += `<p class="success">✅ Design Settings:</p><pre>${JSON.stringify(designSettings, null, 2)}</pre>`;
+                }
+
+                div.innerHTML = html;
+            } catch (err) {
+                div.innerHTML = `<p class="error">❌ خطأ:</p><pre>${err.message}</pre>`;
+            }
+        }
+
+        // اختبار تسجيل الدخول
+        async function testLogin() {
+            const div = document.getElementById('login-test');
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            div.innerHTML = '<p>جاري تسجيل الدخول...</p>';
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email,
+                    password
+                });
+
+                if (error) {
+                    div.innerHTML = `<p class="error">❌ فشل تسجيل الدخول:</p><pre>${JSON.stringify(error, null, 2)}</pre>`;
+                } else {
+                    div.innerHTML = `<p class="success">✅ نجح تسجيل الدخول!</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (err) {
+                div.innerHTML = `<p class="error">❌ خطأ:</p><pre>${err.message}</pre>`;
+            }
+        }
+
+        // تشغيل الاختبار الأولي عند تحميل الصفحة
+        window.onload = testEnv;
+    </script>
+</body>
+</html>

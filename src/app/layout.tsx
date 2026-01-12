@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getStoreSettingsServer()
   return {
-    title: settings?.store_name || "مكة - متجر الأزياء النسائية الراقية",
+    title: settings?.store_name || "متجرك - متجر إلكتروني",
     description: settings?.store_description || "اكتشفي مجموعتنا الحصرية من العبايات والكارديجان والبدل والفساتين",
     generator: "v0.app",
     // Performance hints

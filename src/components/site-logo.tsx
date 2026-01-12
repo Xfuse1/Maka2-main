@@ -11,7 +11,7 @@ export function SiteLogo({ width = 80, height = 80, className = "" }: { width?: 
   const { logoUrl } = useDesignStore()
   const [currentLogo, setCurrentLogo] = useState<string>(logoUrl || DEFAULT_LOGO)
   const [imageError, setImageError] = useState(false)
-  const [storeName, setStoreName] = useState<string>("مكة")
+  const [storeName, setStoreName] = useState<string>("متجرك")
 
   useEffect(() => {
     // Load logo from database on mount

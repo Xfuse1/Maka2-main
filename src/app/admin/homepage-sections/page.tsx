@@ -45,16 +45,18 @@ function ProductSelector({
   }, [])
 
   async function loadProducts() {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("products")
-      .select("id, name_ar, price, images")
-      .order("created_at", { ascending: false })
-
-    if (!error && data) {
-      setProducts(data)
+    // Use admin API that filters by store_id automatically
+    try {
+      const response = await fetch('/api/admin/products')
+      if (!response.ok) throw new Error('Failed to load products')
+      const result = await response.json()
+      setProducts(result.data || [])
+    } catch (error) {
+      console.error('Error loading products:', error)
+      setProducts([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const toggleProduct = (productId: string) => {

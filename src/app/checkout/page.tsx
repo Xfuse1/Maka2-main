@@ -61,11 +61,17 @@ export default function CheckoutPage() {
     return items.reduce((sum, it: any) => sum + toNum(it?.product?.price, 0) * toNum(it?.quantity, 0), 0)
   }, [getTotalPrice, items])
 
-  // Fetch active payment offers
+  // Fetch active payment offers (via API for store isolation)
   useEffect(() => {
     const fetchOffers = async () => {
-      const { data } = await supabase.from('payment_offers').select('*').eq('is_active', true)
-      if (data) setPaymentOffers(data)
+      try {
+        const res = await fetch('/api/payment-offers')
+        if (!res.ok) return
+        const json = await res.json()
+        if (json.data) setPaymentOffers(json.data)
+      } catch (e) {
+        console.error('Failed to load payment offers:', e)
+      }
     }
     fetchOffers()
   }, [])

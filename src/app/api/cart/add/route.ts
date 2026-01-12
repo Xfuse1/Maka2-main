@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 import { cookies } from "next/headers"
 
 export async function POST(request: NextRequest) {
@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await getSupabaseAdminClient()
-  const cookieStore = await cookies()
+    const storeId = await getStoreIdFromRequest()
+    const cookieStore = await cookies()
 
     // Get or create session ID for anonymous users
     let sessionId = cookieStore.get("cart_session_id")?.value
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       .select("*")
       .eq("product_variant_id", productVariantId)
       .eq("session_id", sessionId)
+      .eq("store_id", storeId) // Filter by store for multi-tenant
       .eq("size", size || "")
       .eq("color", color || "")
       .maybeSingle()
@@ -48,12 +50,14 @@ export async function POST(request: NextRequest) {
         .from("cart_items")
         .update([updateData])
         .eq("id", (existingItem as any).id)
+        .eq("store_id", storeId) // Verify store ownership
       if (updateError) {
         console.error("[Cart API] Error updating cart item:", updateError)
         return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
       }
     } else {
       const insertData = {
+        store_id: storeId, // Add store_id for multi-tenant
         product_variant_id: productVariantId,
         quantity,
         session_id: sessionId,

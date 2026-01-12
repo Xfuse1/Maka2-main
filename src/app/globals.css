@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* 
-  Updated color scheme to match Mecca fashion brand with pink/rose theme
+  Dynamic color scheme - customizable by admin
   ✅ Admin يقدر يغيّر الألوان عن طريق المتغيرات:
   --primary-hex / --background-hex / --foreground-hex
 */

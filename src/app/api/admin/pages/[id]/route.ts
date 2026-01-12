@@ -1,20 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAdminClient } from "@/lib/supabase/admin"
+import { getAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function PATCH(request: NextRequest, { params }: { params: any }) {
   try {
     const adminClient = getAdminClient()
-    const body = await request.json()
-    // normalize/claim a safe payload type so TS doesn't infer `never` for the update arg
-    const payload = body as Record<string, unknown>
+    const storeId = await getStoreIdFromRequest()
+    const body = await request.json() as Record<string, unknown>
+    
+    // Prevent changing store_id
+    delete body.store_id
 
-    // `params` may be a Promise in some Next.js runtime configurations — await it first.
     const resolvedParams = await params
     const id = resolvedParams?.id
     if (!id) return NextResponse.json({ error: "Missing id parameter" }, { status: 400 })
 
-    const tableAny = adminClient.from("page_content") as any
-    const { data, error } = await tableAny.update(payload).eq("id", id).select().single()
+    const { data, error } = await (adminClient.from("page_content") as any)
+      .update(body)
+      .eq("id", id)
+      .eq("store_id", storeId)
+      .select()
+      .single()
 
     if (error) throw error
 
@@ -28,13 +33,16 @@ export async function PATCH(request: NextRequest, { params }: { params: any }) {
 export async function DELETE(request: NextRequest, { params }: { params: any }) {
   try {
     const adminClient = getAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
     const resolvedParams = await params
     const id = resolvedParams?.id
     if (!id) return NextResponse.json({ error: "Missing id parameter" }, { status: 400 })
 
-    const tableAny = adminClient.from("page_content") as any
-    const { error } = await tableAny.delete().eq("id", id)
+    const { error } = await (adminClient.from("page_content") as any)
+      .delete()
+      .eq("id", id)
+      .eq("store_id", storeId)
 
     if (error) throw error
 

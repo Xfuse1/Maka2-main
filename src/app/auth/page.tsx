@@ -137,6 +137,13 @@ export default function AuthPage() {
                     }
                     return
                   }
+                  // Clear user-specific cache on successful login
+                  try {
+                    const { clearUserCacheOnLogin } = await import("@/lib/client/clearClientData")
+                    await clearUserCacheOnLogin()
+                  } catch (e) {
+                    // Best effort - ignore errors
+                  }
                   // success -> navigate home
                   router.push('/')
                 } catch (err) {
@@ -249,6 +256,14 @@ export default function AuthPage() {
                         const msg = encodeURIComponent((json.message || 'تم إنشاء الحساب بنجاح. الرجاء تسجيل الدخول.') + ' (تسجيل الدخول التلقائي فشل)')
                         router.replace(`/auth?message=${msg}&status=success`)
                         return
+                      }
+
+                      // Clear user-specific cache on successful login
+                      try {
+                        const { clearUserCacheOnLogin } = await import("@/lib/client/clearClientData")
+                        await clearUserCacheOnLogin()
+                      } catch (e) {
+                        // Best effort - ignore errors
                       }
 
                       // signed in successfully

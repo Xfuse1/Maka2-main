@@ -19,9 +19,9 @@ const DEFAULT_ADMIN: AdminUser = {
 
 // Default site settings
 const DEFAULT_SETTINGS: SiteSettings = {
-  siteName: "مكة",
-  siteDescription: "متجر مكة للأزياء النسائية الراقية",
-  contactEmail: "info@mecca-fashion.com",
+  siteName: "متجرك",
+  siteDescription: "مرحباً بك في متجرنا الإلكتروني",
+  contactEmail: "info@yourstore.com",
   contactPhone: "01234567890",
   contactWhatsapp: "01234567890",
   contactAddress: "القاهرة، مصر",

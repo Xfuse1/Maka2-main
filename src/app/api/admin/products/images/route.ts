@@ -1,16 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
-// POST - Create product image
+// POST - Create product image (with store_id)
 export async function POST(request: NextRequest) {
   try {
     const supabase = createAdminClient()
     const body = await request.json()
+    const storeId = await getStoreIdFromRequest()
+
+    // Verify product belongs to current store before adding image
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", body.product_id)
+      .eq("store_id", storeId)
+      .single()
+
+    if (productError || !product) {
+      return NextResponse.json({ error: "المنتج غير موجود أو لا يمكنك تعديله" }, { status: 404 })
+    }
 
     const { data, error } = await (supabase
       .from("product_images") as any)
       .insert([
         {
+          store_id: storeId, // Add store_id for multi-tenant
           product_id: body.product_id,
           image_url: body.image_url,
           alt_text_ar: body.alt_text_ar,

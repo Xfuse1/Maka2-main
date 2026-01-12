@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET() {
   try {
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
     
-    // Fetch all data for accurate statistics
+    // Fetch all data for accurate statistics (filtered by store_id)
     const [
       { data: allOrders, error: ordersError },
       { data: recentOrders, error: recentOrdersError },
@@ -13,28 +14,33 @@ export async function GET() {
       { data: customers, error: customersError },
       { data: variants, error: variantsError },
     ] = await Promise.all([
-      // Get all orders for accurate stats (include created_at)
+      // Get all orders for accurate stats (filtered by store)
       supabase
         .from("orders")
-        .select("id, total, status, created_at"),
-      // Get recent 4 orders for display
+        .select("id, total, status, created_at")
+        .eq("store_id", storeId),
+      // Get recent 4 orders for display (filtered by store)
       supabase
         .from("orders")
         .select("id, order_number, customer_name, total, status, created_at")
+        .eq("store_id", storeId)
         .order("created_at", { ascending: false })
         .limit(4),
-      // products (include inventory if present)
+      // products (filtered by store)
       supabase
         .from("products")
-        .select("id, inventory_quantity"),
-      // customers with created_at to compute weekly new customers
+        .select("id, inventory_quantity")
+        .eq("store_id", storeId),
+      // customers (filtered by store)
       supabase
         .from("customers")
-        .select("id, created_at"),
-      // product variants to compute per-product stock totals
+        .select("id, created_at")
+        .eq("store_id", storeId),
+      // product variants (filtered by store)
       supabase
         .from("product_variants")
-        .select("product_id, inventory_quantity"),
+        .select("product_id, inventory_quantity")
+        .eq("store_id", storeId),
     ])
 
     // Log errors for debugging

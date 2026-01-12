@@ -1,24 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
+import { invalidateSingleProductCache, invalidateProductCache } from "@/lib/cache/products-cache"
+import { revalidatePath } from "next/cache"
 
-// GET - Fetch single product
+// GET - Fetch single product (with store_id verification)
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
-    const { data, error } = await supabase
+    // Fetch product with category
+    const { data: product, error } = await supabase
       .from("products")
-      .select(`
-        *,
-        category:categories(name_ar, name_en),
-        product_images(*),
-        product_variants(*)
-      `)
+      .select("*, category:categories(name_ar, name_en)")
       .eq("id", id)
+      .eq("store_id", storeId)
       .single()
 
     if (error) throw error
+
+    // Fetch images and variants separately (workaround for partitioned tables)
+    const [imagesResult, variantsResult] = await Promise.all([
+      supabase.from("product_images").select("*").eq("product_id", id),
+      supabase.from("product_variants").select("*").eq("product_id", id)
+    ])
+
+    const data = {
+      ...product,
+      product_images: imagesResult.data || [],
+      product_variants: variantsResult.data || []
+    }
 
     return NextResponse.json({ data })
   } catch (error) {
@@ -27,14 +39,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// PATCH - Update product
+// PATCH - Update product (with store_id verification)
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
-    const supabase = getSupabaseAdminClient() as any // <-- fix type error
+    const supabase = getSupabaseAdminClient() as any
+    const storeId = await getStoreIdFromRequest()
 
-    // فقط الحقول المسموحة للتحديث
+    // فقط الحقول المسموحة للتحديث (لا يمكن تغيير store_id)
     const allowedFields = [
       "name_ar",
       "name_en",
@@ -59,10 +72,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .from("products")
       .update({ ...updateData })
       .eq("id", id)
+      .eq("store_id", storeId) // Verify product belongs to current store
       .select()
       .single()
 
     if (error) throw error
+
+    // Invalidate product cache after update
+    invalidateSingleProductCache(storeId, id)
+    revalidatePath('/admin/products')
+    revalidatePath(`/products/${id}`)
+    revalidatePath('/')
 
     return NextResponse.json({ data })
   } catch (error) {
@@ -71,11 +91,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-// DELETE - Delete product (cascade delete all related data)
+// DELETE - Delete product (cascade delete all related data, with store_id verification)
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
+
+    // First verify the product belongs to this store
+    const { data: product, error: verifyError } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", id)
+      .eq("store_id", storeId)
+      .single()
+
+    if (verifyError || !product) {
+      return NextResponse.json(
+        { error: "المنتج غير موجود أو لا يمكنك حذفه" },
+        { status: 404 }
+      )
+    }
 
     // Step 1: Get all product variants
     const { data: variants } = await supabase
@@ -93,7 +129,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
       if (orderItemsError) {
         console.error("[v0] Error deleting order items:", orderItemsError)
-        // Continue anyway - we want to delete the product
       }
     }
 
@@ -105,7 +140,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (variantsError) {
       console.error("[v0] Error deleting variants:", variantsError)
-      // Continue anyway
     }
 
     // Step 4: Delete product images
@@ -116,7 +150,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (imagesError) {
       console.error("[v0] Error deleting images:", imagesError)
-      // Continue anyway
     }
 
     // Step 5: Delete the product itself
@@ -124,6 +157,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .from("products")
       .delete()
       .eq("id", id)
+      .eq("store_id", storeId) // Extra safety check
 
     if (productError) {
       console.error("[v0] Error deleting product:", productError)
@@ -132,6 +166,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         { status: 500 }
       )
     }
+
+    // Invalidate product caches after deletion
+    invalidateProductCache(storeId)
+    revalidatePath('/admin/products')
+    revalidatePath('/')
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

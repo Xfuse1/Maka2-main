@@ -1,6 +1,6 @@
 "use server"
 
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 
 export interface HomepageSection {
@@ -34,9 +34,12 @@ async function handleSupabaseError(error: any, errorMessage: string) {
 export async function getAllSections() {
   try {
     const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
+    
     const { data, error } = await supabase
       .from("homepage_sections")
       .select("*")
+      .eq("store_id", storeId)
       .order("display_order", { ascending: true })
 
     if (error) throw error
@@ -50,6 +53,8 @@ export async function getAllSections() {
 export async function createSection(section: Partial<HomepageSection>) {
   try {
     const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
+    
     // Prevent creating duplicate unique section types
     const UNIQUE_TYPES = ["reviews", "hero", "featured"]
     if (section.section_type && UNIQUE_TYPES.includes(section.section_type)) {
@@ -57,6 +62,7 @@ export async function createSection(section: Partial<HomepageSection>) {
         .from("homepage_sections")
         .select("id")
         .eq("section_type", section.section_type)
+        .eq("store_id", storeId)
         .limit(1)
 
       if (checkErr) throw checkErr
@@ -64,7 +70,11 @@ export async function createSection(section: Partial<HomepageSection>) {
         return { success: false, error: `لا يمكن إنشاء أكثر من قسم من النوع ${section.section_type}` }
       }
     }
-    const { data, error } = await (supabase.from("homepage_sections") as any).insert([section]).select().single()
+    const { data, error } = await (supabase.from("homepage_sections") as any)
+      .insert([{ ...section, store_id: storeId }])
+      .select()
+      .single()
+      
     if (error) throw error
     revalidatePath("/")
     revalidatePath("/admin/homepage-sections")
@@ -77,6 +87,8 @@ export async function createSection(section: Partial<HomepageSection>) {
 export async function updateSection(id: string, updates: Partial<HomepageSection>) {
   try {
     const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
+    
     // Prevent updating to a duplicate unique section type
     const UNIQUE_TYPES = ["reviews", "hero", "featured"]
     if (updates.section_type && UNIQUE_TYPES.includes(updates.section_type)) {
@@ -84,6 +96,7 @@ export async function updateSection(id: string, updates: Partial<HomepageSection
         .from("homepage_sections")
         .select("id")
         .eq("section_type", updates.section_type)
+        .eq("store_id", storeId)
         .neq("id", id)
         .limit(1)
 
@@ -92,7 +105,13 @@ export async function updateSection(id: string, updates: Partial<HomepageSection
         return { success: false, error: `لا يمكن وجود أكثر من قسم من النوع ${updates.section_type}` }
       }
     }
-    const { data, error } = await (supabase.from("homepage_sections") as any).update(updates).eq("id", id).select().single()
+    const { data, error } = await (supabase.from("homepage_sections") as any)
+      .update(updates)
+      .eq("id", id)
+      .eq("store_id", storeId)
+      .select()
+      .single()
+      
     if (error) throw error
     revalidatePath("/")
     revalidatePath("/admin/homepage-sections")
@@ -105,7 +124,14 @@ export async function updateSection(id: string, updates: Partial<HomepageSection
 export async function deleteSection(id: string) {
   try {
     const supabase = createAdminClient()
-    const { error } = await supabase.from("homepage_sections").delete().eq("id", id)
+    const storeId = await getStoreIdFromRequest()
+    
+    const { error } = await supabase
+      .from("homepage_sections")
+      .delete()
+      .eq("id", id)
+      .eq("store_id", storeId)
+      
     if (error) throw error
     revalidatePath("/")
     revalidatePath("/admin/homepage-sections")
@@ -118,12 +144,16 @@ export async function deleteSection(id: string) {
 export async function toggleSectionVisibility(id: string, isActive: boolean) {
   try {
     const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
+    
     const { data, error } = await (supabase
       .from("homepage_sections") as any)
       .update({ is_active: isActive })
       .eq("id", id)
+      .eq("store_id", storeId)
       .select()
       .single()
+      
     if (error) throw error
     revalidatePath("/")
     revalidatePath("/admin/homepage-sections")

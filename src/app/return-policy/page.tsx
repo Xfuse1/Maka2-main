@@ -96,7 +96,7 @@ export default function ReturnPolicyPage() {
                 <ol className="space-y-4 text-muted-foreground leading-relaxed">
                   <li className="flex items-start gap-3">
                     <span className="font-bold text-primary">1.</span>
-                    <span>تواصلي معنا عبر الواتساب على 01234567890 أو البريد الإلكتروني info@mecca-fashion.com</span>
+                    <span>تواصل معنا عبر الواتساب أو البريد الإلكتروني الموجود في صفحة التواصل</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="font-bold text-primary">2.</span>

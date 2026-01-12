@@ -56,6 +56,7 @@ interface Product {
   product_images: ProductImage[]
   product_variants: ProductVariant[]
   category_id: string
+  store_id?: string
 }
 
 export default function ProductDetailPage() {
@@ -69,7 +70,7 @@ export default function ProductDetailPage() {
 
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const [, setQuantity] = useState(1)
+  const [quantity, setQuantity] = useState(1)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -85,45 +86,75 @@ export default function ProductDetailPage() {
   useEffect(() => {
     async function fetchProduct() {
       try {
-        const { data, error } = await supabase
+        console.log('[Product Debug] Fetching product:', params.id)
+
+        // Fetch product with category (this relationship works)
+        const { data: productData, error: productError } = await supabase
           .from("products")
-          .select(
-            `
-            *,
-            category:categories(name_ar, name_en),
-            product_images(id, image_url, alt_text_ar, display_order),
-            product_variants(id, name_ar, color, color_hex, size, price, inventory_quantity)
-          `
-          )
+          .select("*, category:categories(name_ar, name_en)")
           .eq("id", params.id)
           .eq("is_active", true)
           .single()
 
-        if (error) {
-          console.error("[v0] ❌ Error fetching product:", error)
+        if (productError) {
+          console.error('[Product Debug] Error:', productError)
+          console.error("[v0] ❌ Error fetching product:", productError)
           setProduct(null)
           return
         }
 
+        // Fetch images and variants separately (workaround for partitioned tables)
+        const [imagesResult, variantsResult] = await Promise.all([
+          supabase
+            .from("product_images")
+            .select("id, image_url, alt_text_ar, display_order")
+            .eq("product_id", params.id)
+            .order("display_order", { ascending: true }),
+          supabase
+            .from("product_variants")
+            .select("id, name_ar, color, color_hex, size, price, inventory_quantity")
+            .eq("product_id", params.id)
+        ])
+
+        // Combine the data
+        const data = {
+          ...productData,
+          product_images: imagesResult.data || [],
+          product_variants: variantsResult.data || []
+        }
+
+        console.log('[Product Debug] Query result:', { data })
+        console.log('[Product Debug] product_variants:', data.product_variants)
+        console.log('[Product Debug] product_images:', data.product_images)
+
         setProduct(data)
 
-        if (data.category_id) {
-          const { data: related } = await supabase
+        // Fetch related products
+        if (productData.category_id) {
+          const { data: relatedProducts } = await supabase
             .from("products")
-            .select(
-              `
-              *,
-              category:categories(name_ar),
-              product_images(image_url, display_order)
-            `
-            )
-            .eq("category_id", data.category_id)
+            .select("*")
+            .eq("category_id", productData.category_id)
             .eq("is_active", true)
             .neq("id", params.id)
             .limit(3)
 
-          if (related) {
-            setRelatedProducts(related)
+          if (relatedProducts && relatedProducts.length > 0) {
+            // Fetch images for related products
+            const relatedIds = relatedProducts.map(p => p.id)
+            const { data: relatedImages } = await supabase
+              .from("product_images")
+              .select("product_id, image_url, display_order")
+              .in("product_id", relatedIds)
+              .order("display_order", { ascending: true })
+
+            // Attach images to related products
+            const relatedWithImages = relatedProducts.map(p => ({
+              ...p,
+              product_images: (relatedImages || []).filter(img => img.product_id === p.id)
+            }))
+
+            setRelatedProducts(relatedWithImages)
           }
         }
       } catch (err) {
@@ -319,11 +350,12 @@ export default function ProductDetailPage() {
       const { error } = await supabase.from("product_reviews").insert([
         {
           product_id: product!.id,
+          store_id: product!.store_id,
           rating: userRating,
-            review_text: userReview,
-            customer_name: reviewerName,
-            customer_email: reviewerEmail,
-            // reviews are moderated via `is_approved` in the DB; leave unset (null) or false
+          review_text: userReview,
+          customer_name: reviewerName,
+          customer_email: reviewerEmail,
+          // reviews are moderated via `is_approved` in the DB; leave unset (null) or false
         },
       ])
 

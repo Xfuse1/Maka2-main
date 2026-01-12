@@ -1,87 +1,673 @@
-# MakaStore - E-commerce Platform
+# 🛍️ Maka Store - متجر إلكتروني متكامل
 
-A modern e-commerce platform built with Next.js 15, featuring Arabic RTL support, payment integration with Kashier, and comprehensive product management.
+<div align="center">
 
-## 🚀 Features
+![Next.js](https://img.shields.io/badge/Next.js-15.5-black?style=for-the-badge&logo=next.js)
+![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.1-38B2AC?style=for-the-badge&logo=tailwind-css)
+![Supabase](https://img.shields.io/badge/Supabase-Latest-3ECF8E?style=for-the-badge&logo=supabase)
 
-- **Multi-language Support**: Full Arabic RTL interface with English fallbacks
-- **Product Categories**: Abayas, Cardigans, Dresses, Suits, and more
-- **Shopping Cart**: Zustand-powered state management with persistent storage  
-- **Payment Integration**: 
-  - Cash on Delivery (COD)
-  - Kashier Payment Gateway (Palestinian payment processor)
-- **Admin Dashboard**: Complete product and order management
-- **Database**: Supabase PostgreSQL with comprehensive schema
-- **Responsive Design**: Mobile-first design with Tailwind CSS
-- **Type Safety**: Full TypeScript implementation
+منصة تجارة إلكترونية حديثة مبنية بأحدث التقنيات، مع دعم كامل للغة العربية (RTL)، نظام دفع متكامل، ولوحة تحكم شاملة
 
-## 🛠 Tech Stack
+[المميزات](#-المميزات) • [التقنيات](#️-التقنيات-المستخدمة) • [التثبيت](#-التثبيت) • [الاستخدام](#-الاستخدام) • [البنية](#-بنية-المشروع)
 
-- **Frontend**: Next.js 15, React 18, TypeScript
-- **Styling**: Tailwind CSS, Radix UI Components
-- **State Management**: Zustand
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
-- **Payment**: Kashier Gateway
-- **Deployment Ready**: Vercel, Netlify compatible
+</div>
 
-## 📦 Installation
+---
 
-1. Clone the repository:
+## ✨ المميزات
+
+### 🎨 واجهة المستخدم
+- ✅ **دعم كامل للغة العربية (RTL)** مع إمكانية التبديل للإنجليزية
+- ✅ **تصميم متجاوب** يعمل على جميع الأجهزة (Mobile-First Design)
+- ✅ **ثيمات ديناميكية** مع وضع النهار والليل (Dark/Light Mode)
+- ✅ **رسوم متحركة سلسة** باستخدام Framer Motion و GSAP
+- ✅ **مكونات UI حديثة** من Radix UI و Shadcn/ui
+
+### 🛒 نظام التسوق
+- ✅ **عرض المنتجات** مع تصنيفات متعددة (عبايات، كارديجان، فساتين، أطقم)
+- ✅ **سلة تسوق متقدمة** مع إدارة الحالة باستخدام Zustand
+- ✅ **خيارات متنوعة** (الألوان، المقاسات، المقاسات المخصصة)
+- ✅ **نظام تقييمات** للمنتجات
+- ✅ **البحث والفلترة** المتقدمة
+- ✅ **قائمة المفضلة** (Wishlist)
+
+### 💳 نظام الدفع
+- ✅ **الدفع عند الاستلام (COD)** مع تأكيد فوري
+- ✅ **بوابة الدفع Kashier** (معالج دفع فلسطيني)
+- ✅ **Firebase للدفع الإلكتروني** كخيار بديل
+- ✅ **نظام عروض الدفع** (خصومات على طرق دفع معينة)
+- ✅ **تتبع حالة الدفع** في الوقت الفعلي
+
+### 👤 إدارة المستخدمين
+- ✅ **نظام مصادقة متكامل** (Supabase Auth)
+- ✅ **ملفات شخصية للمستخدمين** مع صور وبيانات قابلة للتعديل
+- ✅ **عناوين الشحن المتعددة** لكل مستخدم
+- ✅ **سجل الطلبات** وتتبع الحالة
+
+### 🔐 لوحة التحكم (Admin)
+- ✅ **إدارة المنتجات** (إضافة، تعديل، حذف، صور متعددة)
+- ✅ **إدارة التصنيفات** مع صور مخصصة
+- ✅ **إدارة الطلبات** وتتبع حالاتها
+- ✅ **إحصائيات مبيعات** ولوحات تحليلية (Recharts)
+- ✅ **إدارة إعدادات التصميم** (الشعار، الألوان، الخطوط)
+- ✅ **إدارة المحتوى** (الصفحات، الأقسام، Hero Slides)
+- ✅ **نظام رسائل التواصل** من العملاء
+- ✅ **حماية مستويات الوصول** (RLS - Row Level Security)
+
+### 📦 ميزات إضافية
+- ✅ **نظام الشحن** مع حساب التكاليف
+- ✅ **توصيات AI للمنتجات** (تحت التطوير)
+- ✅ **تتبع الأحداث Analytics** (تحليلات سلوك المستخدم)
+- ✅ **Storage لملفات الصور** (Supabase Storage)
+- ✅ **تحسين أداء الصور** (Next.js Image Optimization - AVIF/WebP)
+- ✅ **Lazy Loading** و Code Splitting تلقائي
+- ✅ **SEO Optimized** مع Metadata ديناميكية
+
+## 🛠️ التقنيات المستخدمة
+
+### Frontend
+| تقنية | الإصدار | الاستخدام |
+|-------|---------|-----------|
+| **Next.js** | 15.5.9 | إطار عمل React مع App Router |
+| **React** | 19.0.0 | مكتبة بناء واجهات المستخدم |
+| **TypeScript** | 5.0 | للأمان الكتابي الكامل |
+| **Tailwind CSS** | 4.1.14 | تصميم سريع ومرن |
+| **Radix UI** | Latest | مكونات UI بدون تصميم |
+| **Framer Motion** | 12.23.24 | رسوم متحركة متقدمة |
+| **GSAP** | 3.13.0 | رسوم متحركة احترافية |
+| **Zustand** | Latest | إدارة الحالة العالمية |
+| **React Hook Form** | Latest | إدارة النماذج |
+| **Zod** | 3.25.67 | التحقق من البيانات |
+| **Lucide React** | 0.454.0 | أيقونات حديثة |
+| **Recharts** | Latest | رسوم بيانية تفاعلية |
+| **Embla Carousel** | Latest | سلايدر صور احترافي |
+
+### Backend & Database
+| تقنية | الإصدار | الاستخدام |
+|-------|---------|-----------|
+| **Supabase** | Latest | قاعدة بيانات PostgreSQL |
+| **Supabase Auth** | Latest | نظام المصادقة |
+| **Supabase Storage** | Latest | تخزين الملفات والصور |
+| **Firebase** | 12.5.0 | خدمات إضافية (اختياري) |
+
+### الدفع والتحليلات
+- **Kashier Payment Gateway** - بوابة دفع فلسطينية
+- **Vercel Analytics** - تحليلات الأداء
+- **Custom Analytics Events** - تتبع سلوك المستخدم
+
+### الأدوات التطويرية
+- **ESLint** - فحص جودة الكود
+- **TypeScript ESLint** - قواعد TypeScript
+- **PostCSS** - معالج CSS
+- **Sharp** - تحسين الصور
+- **pnpm** - مدير الحزم السريع
+
+
+## 📋 المتطلبات الأساسية
+
+قبل البدء، تأكد من تثبيت:
+
+- **Node.js** الإصدار 18.0 أو أحدث
+- **pnpm** (مُوصى به) أو npm/yarn
+- حساب **Supabase** مجاني
+- حساب **Kashier** للدفع (اختياري للتطوير)
+
+## 🚀 التثبيت
+
+### 1️⃣ استنساخ المشروع
+
 ```bash
-git clone https://github.com/yourusername/MakaStore.git
-cd MakaStore
+git clone https://github.com/yourusername/Maka2-main.git
+cd Maka2-main
 ```
 
-2. Install dependencies:
+### 2️⃣ تثبيت الاعتمادات
+
+باستخدام pnpm (مُوصى به):
+```bash
+pnpm install
+```
+
+أو باستخدام npm:
 ```bash
 npm install
 ```
 
-3. Set up environment variables:
+أو باستخدام yarn:
 ```bash
-cp .env.example .env.local
+yarn install
 ```
 
-4. Configure your environment variables in `.env.local`:
+### 3️⃣ إعداد قاعدة البيانات (Supabase)
+
+1. **إنشاء مشروع Supabase:**
+   - اذهب إلى [supabase.com](https://supabase.com)
+   - أنشئ مشروع جديد
+
+2. **تشغيل سكريبتات قاعدة البيانات:**
+   - افتح SQL Editor في Supabase
+   - شغّل السكريبتات بالترتيب من مجلد `scripts/`:
+     ```
+     00-complete-database-setup.sql
+     01-create-tables.sql
+     02-enable-rls.sql
+     03-seed-data.sql
+     04-storage-setup.sql
+     ... (باقي السكريبتات حسب الحاجة)
+     ```
+
+3. **إعداد Storage Buckets:**
+   - شغّل `04-storage-setup.sql` لإنشاء Buckets للصور
+   - تأكد من ضبط الأذونات (Public للقراءة)
+
+### 4️⃣ إعداد متغيرات البيئة
+
+أنشئ ملف `.env.local` في الجذر:
+
 ```bash
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 
-# Kashier Payment Gateway
+# Kashier Payment Gateway (اختياري للتطوير)
 KASHIER_API_KEY=your_kashier_api_key
 KASHIER_MERCHANT_ID=your_merchant_id
+KASHIER_DEV_BYPASS=true  # true للتطوير، false للإنتاج
+
+# Firebase (اختياري)
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
+
+# Application URL
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-5. Run the development server:
-```bash
-npm run dev
+**الحصول على مفاتيح Supabase:**
+1. اذهب إلى Project Settings → API
+2. انسخ `Project URL` و `anon/public key`
+
+### 5️⃣ إنشاء مستخدم Admin
+
+شغّل في SQL Editor:
+```sql
+-- استبدل البريد الإلكتروني وكلمة المرور
+INSERT INTO auth.users (email, encrypted_password, email_confirmed_at)
+VALUES ('admin@example.com', crypt('your-password', gen_salt('bf')), now());
+
+-- احصل على user_id من النتيجة واستبدله أدناه
+INSERT INTO profiles (id, email, role)
+VALUES ('user-id-from-above', 'admin@example.com', 'admin');
 ```
 
-## 🎯 Usage
+أو استخدم صفحة `/admin/signup` للتسجيل مباشرة.
 
-### Customer Flow
-- Browse products by category
-- Add items to cart with size/color selection  
-- Proceed to checkout with shipping details
-- Choose payment method (COD or Kashier)
-- Complete order and receive confirmation
+## 🎯 الاستخدام
 
-### Admin Flow
-- Access admin dashboard at `/admin`
-- Manage products, categories, and orders
-- View analytics and sales reports
+### تشغيل بيئة التطوير
 
-## 🔧 Development
+```bash
+pnpm dev
+```
 
-For payment testing, set `KASHIER_DEV_BYPASS=true` in your `.env.local` to bypass payment gateway issues.
+الموقع سيعمل على: **http://localhost:3000**
 
-## 📄 License
+### تشغيل بيئة الإنتاج
 
-This project is licensed under the MIT License.
+```bash
+# بناء المشروع
+pnpm build
 
-## 🤝 Contributing
+# تشغيل الإنتاج
+pnpm start
+```
 
-Contributions are welcome! Please read our contributing guidelines and submit pull requests for any improvements.
+### سكريبتات مفيدة
+
+```bash
+# فحص الأخطاء البرمجية
+pnpm lint
+
+# تشغيل على شبكة محلية (يمكن الوصول من أجهزة أخرى)
+pnpm dev --hostname 0.0.0.0
+```
+
+## 🗂️ بنية المشروع
+
+```
+Maka2-main/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── (public)/          # صفحات عامة
+│   │   ├── admin/             # لوحة التحكم
+│   │   ├── api/               # API Routes
+│   │   ├── checkout/          # صفحة الدفع
+│   │   ├── product/           # صفحات المنتجات
+│   │   └── layout.tsx         # Layout رئيسي
+│   │
+│   ├── components/            # مكونات React
+│   │   ├── ui/               # مكونات UI أساسية
+│   │   ├── admin/            # مكونات لوحة التحكم
+│   │   ├── optimized-image.tsx
+│   │   ├── lazy-components.tsx
+│   │   └── ...
+│   │
+│   ├── lib/                   # مكتبات مساعدة
+│   │   ├── supabase/         # Supabase clients
+│   │   ├── utils.ts          # دوال مساعدة
+│   │   └── types.ts          # TypeScript types
+│   │
+│   ├── services/              # خدمات Backend
+│   │   ├── payment/          # معالجة الدفع
+│   │   ├── orders/           # إدارة الطلبات
+│   │   └── ...
+│   │
+│   ├── store/                 # Zustand stores
+│   │   ├── auth-store.ts     # حالة المصادقة
+│   │   ├── cart-store.ts     # حالة السلة
+│   │   ├── settings-store.ts # إعدادات التطبيق
+│   │   └── design-store.ts   # إعدادات التصميم
+│   │
+│   ├── hooks/                 # Custom React Hooks
+│   ├── styles/                # ملفات CSS عامة
+│   └── middleware.ts          # Next.js Middleware
+│
+├── public/                    # ملفات ثابتة (صور، أيقونات)
+├── database/                  # Schema قاعدة البيانات
+├── scripts/                   # سكريبتات SQL
+├── docs/                      # توثيق إضافي
+├── migrations/                # Migration files
+│
+├── next.config.mjs            # إعدادات Next.js
+├── tailwind.config.js         # إعدادات Tailwind
+├── tsconfig.json              # إعدادات TypeScript
+├── components.json            # إعدادات Shadcn UI
+└── package.json               # اعتمادات المشروع
+```
+
+## 📱 صفحات المشروع
+
+### الصفحات العامة
+- `/` - الصفحة الرئيسية
+- `/products` - عرض جميع المنتجات
+- `/product/[id]` - صفحة منتج واحد
+- `/category/[slug]` - منتجات حسب التصنيف
+- `/cart` - سلة التسوق
+- `/checkout` - صفحة الدفع
+- `/about` - من نحن
+- `/contact` - اتصل بنا
+
+### صفحات Admin
+- `/admin` - لوحة التحكم الرئيسية
+- `/admin/login` - تسجيل دخول Admin
+- `/admin/products` - إدارة المنتجات
+- `/admin/orders` - إدارة الطلبات
+- `/admin/categories` - إدارة التصنيفات
+- `/admin/design` - إعدادات التصميم
+- `/admin/analytics` - الإحصائيات
+- `/admin/messages` - رسائل العملاء
+
+## 🔄 سير العمل
+
+### رحلة العميل (Customer Flow)
+
+1. **التصفح:**
+   - العميل يتصفح المنتجات حسب التصنيفات
+   - يمكن البحث والفلترة حسب السعر/التقييم
+
+2. **اختيار المنتج:**
+   - اختيار اللون والمقاس
+   - إضافة للسلة أو المفضلة
+
+3. **السلة:**
+   - مراجعة المنتجات المختارة
+   - تعديل الكميات أو الحذف
+
+4. **الدفع (Checkout):**
+   - إدخال بيانات الشحن
+   - اختيار طريقة الدفع (COD أو Kashier)
+   - تأكيد الطلب
+
+5. **التتبع:**
+   - استلام رقم تتبع الطلب
+   - متابعة الحالة في حسابي
+
+### رحلة الأدمن (Admin Flow)
+
+1. **تسجيل الدخول** عبر `/admin/login`
+
+2. **إدارة المنتجات:**
+   - إضافة منتج جديد مع صور
+   - تحديد الألوان والمقاسات
+   - ضبط الأسعار والمخزون
+
+3. **معالجة الطلبات:**
+   - استعراض الطلبات الجديدة
+   - تحديث الحالة (قيد المعالجة → تم الشحن → تم التسليم)
+   - طباعة فواتير
+
+4. **التحليلات:**
+   - متابعة المبيعات اليومية/الشهرية
+   - أكثر المنتجات مبيعاً
+   - تقارير تفصيلية
+
+
+## ⚡ تحسينات الأداء
+
+المشروع مُحسّن للأداء العالي:
+
+### 🚀 تحسينات Next.js
+- ✅ **Experimental Features:**
+  - `optimizeCss` - ضغط CSS تلقائي
+  - `optimizePackageImports` - تقليل حجم البكجات
+  - `modularizeImports` - تحميل الأيقونات عند الحاجة فقط
+
+- ✅ **Image Optimization:**
+  - دعم AVIF و WebP
+  - Cache مدته سنة كاملة (31536000s)
+  - Lazy loading تلقائي
+
+- ✅ **Bundle Optimization:**
+  - إزالة `console.log` في Production
+  - Standalone output mode
+  - Tree shaking متقدم
+
+### 🎯 Code Splitting
+- Lazy loading للمكونات الثقيلة
+- Dynamic imports باستخدام `next/dynamic`
+- Route-based splitting تلقائي
+
+### 🌐 Resource Hints
+- DNS Prefetch لـ Supabase و Google Fonts
+- Preconnect للموارد الخارجية
+- Font optimization مع `adjustFontFallback`
+
+### 💾 Middleware Optimization
+- Regex مُجمّع مسبقاً (compiled)
+- استخدام Set للبحث السريع O(1)
+- Early return للملفات الثابتة
+- Matcher محدود للمسارات الضرورية فقط
+
+### 🎨 Loading States
+- Skeleton screens لتحسين UX
+- Suspense boundaries ذكية
+- Progressive loading للصفحات
+
+## 🗄️ قاعدة البيانات
+
+### الجداول الرئيسية
+
+| جدول | الوصف |
+|------|-------|
+| `products` | المنتجات وتفاصيلها |
+| `categories` | تصنيفات المنتجات |
+| `product_images` | صور المنتجات |
+| `product_variants` | ألوان ومقاسات المنتجات |
+| `orders` | الطلبات |
+| `order_items` | عناصر كل طلب |
+| `profiles` | ملفات المستخدمين |
+| `addresses` | عناوين الشحن |
+| `cart_items` | سلة التسوق |
+| `store_settings` | إعدادات المتجر |
+| `design_settings` | إعدادات التصميم |
+| `homepage_sections` | أقسام الصفحة الرئيسية |
+| `hero_slides` | سلايدر الصفحة الرئيسية |
+| `payment_transactions` | معاملات الدفع |
+| `payment_offers` | عروض الدفع |
+| `analytics_events` | تتبع الأحداث |
+| `contact_messages` | رسائل التواصل |
+
+### أمان قاعدة البيانات
+
+- ✅ **Row Level Security (RLS)** مُفعّل على جميع الجداول
+- ✅ **أذونات محددة** لكل جدول حسب الدور (Admin/User/Public)
+- ✅ **حماية API Routes** عبر Middleware
+- ✅ **تشفير البيانات الحساسة**
+
+### Storage Buckets
+
+| Bucket | الاستخدام |
+|--------|-----------|
+| `product-images` | صور المنتجات |
+| `category-images` | صور التصنيفات |
+| `logos` | شعارات المتجر |
+| `hero-slides` | صور السلايدر |
+| `page-images` | صور الصفحات |
+| `profile-images` | صور المستخدمين |
+
+## 🎨 التخصيص
+
+### تغيير الألوان (Theme)
+
+عدّل ملف `src/app/globals.css`:
+
+```css
+@layer base {
+  :root {
+    --primary: 220 90% 56%;
+    --secondary: 280 60% 50%;
+    /* ... باقي المتغيرات */
+  }
+}
+```
+
+أو استخدم لوحة التحكم Admin → Design Settings.
+
+### تخصيص الخطوط
+
+في `src/app/layout.tsx`:
+
+```tsx
+import { Cairo } from "next/font/google"
+
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "600", "700"],
+  display: "swap",
+})
+```
+
+### إضافة تصنيف جديد
+
+1. **من لوحة التحكم:**
+   - Admin → Categories → Add New
+
+2. **أو من SQL:**
+```sql
+INSERT INTO categories (name_ar, name_en, slug, image_url)
+VALUES ('اسم التصنيف', 'Category Name', 'category-slug', 'image-url');
+```
+
+## 🧪 الاختبار
+
+### اختبار نظام الدفع
+
+للتطوير دون دفع فعلي، فعّل وضع Bypass:
+
+```env
+KASHIER_DEV_BYPASS=true
+```
+
+### بيانات تجريبية
+
+شغّل السكريبتات:
+- `03-seed-data.sql` - منتجات وتصنيفات تجريبية
+- `06-comprehensive-test-data.sql` - بيانات كاملة
+- `08-test-customers-orders.sql` - عملاء وطلبات وهمية
+
+## 📈 التحليلات (Analytics)
+
+المشروع يدعم تتبع الأحداث التالية:
+
+- 👁️ **Page Views** - زيارات الصفحات
+- 🛒 **Add to Cart** - إضافة للسلة
+- 💳 **Purchase** - إتمام الشراء
+- ❤️ **Wishlist Add** - إضافة للمفضلة
+- 🔍 **Search** - عمليات البحث
+- 📱 **Product View** - عرض صفحة منتج
+
+البيانات تُخزن في `analytics_events` ويمكن عرضها في Admin Dashboard.
+
+## 🚢 النشر (Deployment)
+
+### النشر على Vercel (مُوصى به)
+
+1. **ربط Repository:**
+   ```bash
+   vercel
+   ```
+
+2. **إضافة متغيرات البيئة:**
+   - في Vercel Dashboard → Settings → Environment Variables
+   - أضف جميع المتغيرات من `.env.local`
+
+3. **Deploy:**
+   ```bash
+   vercel --prod
+   ```
+
+### النشر على Netlify
+
+1. **إنشاء `netlify.toml`:**
+```toml
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+```
+
+2. **Deploy:**
+```bash
+netlify deploy --prod
+```
+
+### النشر على خادم خاص (VPS)
+
+```bash
+# البناء
+pnpm build
+
+# استخدام PM2 لتشغيل المشروع
+pm2 start npm --name "maka-store" -- start
+pm2 save
+pm2 startup
+```
+
+## 🔧 استكشاف الأخطاء
+
+### مشكلة: لا تظهر الصور
+
+**الحل:**
+- تأكد من رفع الصور لـ Supabase Storage
+- تحقق من أذونات Bucket (يجب أن تكون Public للقراءة)
+- تأكد من صحة `NEXT_PUBLIC_SUPABASE_URL`
+
+### مشكلة: خطأ في المصادقة
+
+**الحل:**
+```sql
+-- تحقق من جدول profiles
+SELECT * FROM profiles WHERE email = 'admin@example.com';
+
+-- تأكد من أن role = 'admin'
+UPDATE profiles SET role = 'admin' WHERE email = 'admin@example.com';
+```
+
+### مشكلة: خطأ في الدفع
+
+**الحل:**
+- في التطوير، فعّل `KASHIER_DEV_BYPASS=true`
+- تحقق من صحة `KASHIER_API_KEY`
+- راجع logs في Supabase Dashboard
+
+### مشكلة: Next.js Build Error
+
+**الحل:**
+```bash
+# امسح cache وأعد البناء
+rm -rf .next
+pnpm build
+```
+
+## 🤝 المساهمة
+
+نرحب بمساهماتك! 
+
+### خطوات المساهمة:
+
+1. **Fork المشروع**
+2. **أنشئ branch جديد:**
+   ```bash
+   git checkout -b feature/AmazingFeature
+   ```
+3. **Commit تعديلاتك:**
+   ```bash
+   git commit -m 'Add some AmazingFeature'
+   ```
+4. **Push للـ branch:**
+   ```bash
+   git push origin feature/AmazingFeature
+   ```
+5. **افتح Pull Request**
+
+### معايير الكود:
+
+- ✅ اتبع TypeScript strict mode
+- ✅ استخدم Prettier للتنسيق
+- ✅ اكتب تعليقات واضحة بالعربية أو الإنجليزية
+- ✅ اختبر التعديلات قبل الـ PR
+
+## 📝 الترخيص
+
+هذا المشروع مُرخص تحت **MIT License**.
+
+```
+MIT License
+
+Copyright (c) 2026 Maka Store
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software...
+```
+
+## 📞 التواصل والدعم
+
+- 📧 **البريد الإلكتروني:** support@makastore.com
+- 🌐 **الموقع:** [makastore.com](https://makastore.com)
+- 💬 **Discord:** [Join our community](#)
+- 🐛 **تبليغ عن مشكلة:** [GitHub Issues](https://github.com/yourusername/Maka2-main/issues)
+
+## 🙏 شكر وتقدير
+
+- **Next.js Team** - لإطار العمل الرائع
+- **Vercel** - للاستضافة والتحليلات
+- **Supabase** - لقاعدة البيانات والمصادقة
+- **Radix UI** - لمكونات UI
+- **Tailwind CSS** - للتصميم السريع
+- **المساهمين** - جميع من ساهموا في المشروع ❤️
+
+## 📚 موارد إضافية
+
+- 📖 [توثيق Next.js](https://nextjs.org/docs)
+- 📖 [توثيق Supabase](https://supabase.com/docs)
+- 📖 [توثيق Tailwind CSS](https://tailwindcss.com/docs)
+- 📖 [توثيق TypeScript](https://www.typescriptlang.org/docs)
+
+---
+
+<div align="center">
+
+**صُنع بـ ❤️ في فلسطين**
+
+⭐ إذا أعجبك المشروع، لا تنسَ إعطائه نجمة!
+
+[التقرير عن مشكلة](https://github.com/yourusername/Maka2-main/issues) · [طلب ميزة](https://github.com/yourusername/Maka2-main/issues) · [المساهمة](#-المساهمة)
+
+</div>

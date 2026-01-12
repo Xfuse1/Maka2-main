@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
-// POST - Create product variant
+// POST - Create product variant (with store_id)
 export async function POST(request: NextRequest) {
   try {
     const supabase = createAdminClient()
     const body = await request.json()
+    const storeId = await getStoreIdFromRequest()
 
-    // If SKU provided, ensure it's not already used
+    // Verify product belongs to current store before adding variant
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select("id")
+      .eq("id", body.product_id)
+      .eq("store_id", storeId)
+      .single()
+
+    if (productError || !product) {
+      return NextResponse.json({ error: "المنتج غير موجود أو لا يمكنك تعديله" }, { status: 404 })
+    }
+
+    // If SKU provided, ensure it's not already used in this store
     if (body?.sku) {
       try {
         const { data: existing, error: selErr } = await (supabase.from("product_variants") as any)
           .select("id")
           .eq("sku", body.sku)
+          .eq("store_id", storeId) // Check within same store only
           .limit(1)
           .maybeSingle()
 
         if (selErr) {
-          // log and continue to attempt insert (insert will catch unique constraint)
           console.warn("[v0] SKU check warning:", selErr)
         }
 
@@ -33,6 +46,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await (supabase.from("product_variants") as any)
       .insert([
         {
+          store_id: storeId, // Add store_id for multi-tenant
           product_id: body.product_id,
           name_ar: body.name_ar,
           name_en: body.name_en,
@@ -49,7 +63,6 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("[v0] Supabase error on insert:", error)
-      // Map duplicate key DB error to 409
       const msg = String(error?.message || "")
       if (msg.toLowerCase().includes("duplicate key") || msg.toLowerCase().includes("unique constraint")) {
         return NextResponse.json({ error: "هذا الـ SKU مستخدم بالفعل" }, { status: 409 })

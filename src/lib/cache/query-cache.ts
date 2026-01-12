@@ -1,108 +1,57 @@
-// Query Cache for Server Components - improves performance by caching database queries
-
-import { unstable_cache } from 'next/cache';
-
-// Cache configuration
-const CACHE_TAGS = {
-  products: 'products',
-  categories: 'categories',
-  heroSlides: 'hero-slides',
-  orders: 'orders',
-  homepage: 'homepage',
-} as const;
-
-const CACHE_DURATION = {
-  short: 60, // 1 minute
-  medium: 300, // 5 minutes
-  long: 3600, // 1 hour
-  veryLong: 86400, // 24 hours
-} as const;
-
 /**
- * Cached product queries
+ * @deprecated Use the new cache modules in @/lib/cache instead
+ * This file is kept for backward compatibility
+ * 
+ * New imports:
+ * - import { getCachedProducts, invalidateProductCache } from '@/lib/cache/products-cache'
+ * - import { getCachedCategories } from '@/lib/cache/categories-cache'
+ * - import { getCachedHeroSlides } from '@/lib/cache/homepage-cache'
+ * - import { useCache } from '@/lib/cache/use-cache'
  */
-export const cachedGetAllProducts = unstable_cache(
-  async (fetcher: () => Promise<any>) => {
-    return await fetcher();
-  },
-  ['all-products'],
-  { 
-    revalidate: CACHE_DURATION.medium,
-    tags: [CACHE_TAGS.products],
-  }
-);
 
-export const cachedGetProductById = unstable_cache(
-  async (id: string, fetcher: (id: string) => Promise<any>) => {
-    return await fetcher(id);
-  },
-  ['product-by-id'],
-  { 
-    revalidate: CACHE_DURATION.medium,
-    tags: [CACHE_TAGS.products],
-  }
-);
+// Re-export from new cache system for backward compatibility
+export {
+  CACHE_TAGS,
+  CACHE_TTL as CACHE_DURATION,
+  CACHE_CONFIGS,
+  invalidateCache,
+  invalidateCaches,
+  withCache,
+  getCacheStats,
+} from './index';
 
-export const cachedGetFeaturedProducts = unstable_cache(
-  async (fetcher: () => Promise<any>) => {
-    return await fetcher();
-  },
-  ['featured-products'],
-  { 
-    revalidate: CACHE_DURATION.long,
-    tags: [CACHE_TAGS.products, CACHE_TAGS.homepage],
-  }
-);
+export {
+  getCachedProducts as cachedGetAllProducts,
+  getCachedProductById as cachedGetProductById,
+  getCachedFeaturedProducts as cachedGetFeaturedProducts,
+  invalidateProductCache,
+} from './products-cache';
 
-/**
- * Cached category queries
- */
-export const cachedGetAllCategories = unstable_cache(
-  async (fetcher: () => Promise<any>) => {
-    return await fetcher();
-  },
-  ['all-categories'],
-  { 
-    revalidate: CACHE_DURATION.veryLong,
-    tags: [CACHE_TAGS.categories],
-  }
-);
+export {
+  getCachedCategories as cachedGetAllCategories,
+  invalidateCategoryCache,
+} from './categories-cache';
 
-/**
- * Cached hero slides
- */
-export const cachedGetHeroSlides = unstable_cache(
-  async (fetcher: () => Promise<any>) => {
-    return await fetcher();
-  },
-  ['hero-slides'],
-  { 
-    revalidate: CACHE_DURATION.long,
-    tags: [CACHE_TAGS.heroSlides, CACHE_TAGS.homepage],
-  }
-);
+export {
+  getCachedHeroSlides as cachedGetHeroSlides,
+  invalidateHeroSlidesCache,
+  invalidateHomepageCache,
+} from './homepage-cache';
 
-/**
- * Cached orders for user
- */
-export const cachedGetUserOrders = unstable_cache(
-  async (userId: string, fetcher: (userId: string) => Promise<any>) => {
-    return await fetcher(userId);
-  },
-  ['user-orders'],
-  { 
-    revalidate: CACHE_DURATION.short,
-    tags: [CACHE_TAGS.orders],
-  }
-);
+export {
+  getCachedStoreSettings,
+  getCachedDesignSettings,
+  invalidateStoreSettingsCache,
+  invalidateDesignSettingsCache,
+} from './settings-cache';
 
-/**
- * Cache invalidation helpers
- */
+// Legacy exports for backward compatibility
+import { CACHE_TAGS } from './index';
+
 export const revalidateTags = {
-  products: () => ({ tag: CACHE_TAGS.products }),
-  categories: () => ({ tag: CACHE_TAGS.categories }),
-  heroSlides: () => ({ tag: CACHE_TAGS.heroSlides }),
-  orders: () => ({ tag: CACHE_TAGS.orders }),
-  homepage: () => ({ tag: CACHE_TAGS.homepage }),
+  products: () => ({ tag: CACHE_TAGS.PRODUCTS }),
+  categories: () => ({ tag: CACHE_TAGS.CATEGORIES }),
+  heroSlides: () => ({ tag: CACHE_TAGS.HERO_SLIDES }),
+  orders: () => ({ tag: CACHE_TAGS.ORDERS }),
+  homepage: () => ({ tag: CACHE_TAGS.HOMEPAGE }),
 };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -105,6 +105,7 @@ export async function GET(
   try {
     const { id: productId } = await params;
     const supabase = getSupabaseAdminClient();
+    const storeId = await getStoreIdFromRequest();
 
     // 1. Fetch current product
     const { data: product, error: productError } = await supabase
@@ -121,6 +122,7 @@ export async function GET(
       `
       )
       .eq("id", productId)
+      .eq("store_id", storeId)
       .eq("is_active", true)
       .single();
 
@@ -162,6 +164,7 @@ export async function GET(
           description_en
         `
         )
+        .eq("store_id", storeId)
         .eq("category_id", (product as any).category_id)
         .eq("is_active", true)
         .neq("id", productId)
@@ -200,20 +203,26 @@ export async function GET(
       return NextResponse.json({ items: [] });
     }
 
-    const { data: recommendedProducts } = await (supabase
+    // Fetch products with category
+    const { data: products } = await (supabase
       .from("products") as any)
-      .select(
-        `
-        id,
-        name_ar,
-        name_en,
-        base_price,
-        category:categories(name_ar),
-        product_images(image_url, display_order)
-      `
-      )
+      .select("id, name_ar, name_en, base_price, category:categories(name_ar)")
+      .eq("store_id", storeId)
       .in("id", recommendedIds)
       .eq("is_active", true);
+
+    // Fetch images separately (workaround for partitioned tables)
+    const { data: images } = await supabase
+      .from("product_images")
+      .select("product_id, image_url, display_order")
+      .in("product_id", recommendedIds)
+      .order("display_order", { ascending: true });
+
+    // Attach images to products
+    const recommendedProducts = (products || []).map((p: any) => ({
+      ...p,
+      product_images: (images || []).filter((img: any) => img.product_id === p.id)
+    }));
 
     // Preserve order from recommendedIds
     const orderedProducts = recommendedIds

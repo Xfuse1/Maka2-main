@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 const json = (data: any, status = 200) =>
   new NextResponse(JSON.stringify(data), {
@@ -10,8 +10,11 @@ const json = (data: any, status = 200) =>
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
+    
     const { data, error } = await (supabase.from("contact_messages") as any)
       .select("*")
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false })
 
     if (error) {

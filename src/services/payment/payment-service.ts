@@ -9,6 +9,7 @@ import {
   KashierPaymentResult,
   KashierWebhookPayload 
 } from "./kashier-adapter"
+import { getKashierConfigForStore, type KashierConfig } from "./kashier-config"
 import { auditLogger } from "./audit-logger"
 import { encryptPaymentData, generateSignature, generateSecureToken } from "./encryption"
 
@@ -47,15 +48,27 @@ export class PaymentService {
 
   /**
    * Initiate a new Kashier payment (Clean method)
+   * Now supports multi-tenant with dynamic keys per store
    */
-  async initiateKashierPayment(params: KashierPaymentParams): Promise<KashierPaymentResult> {
+  async initiateKashierPayment(params: KashierPaymentParams, storeId?: string): Promise<KashierPaymentResult> {
     // Basic validation
     if (!params.orderId || !params.amount) {
       throw new Error("Missing required payment parameters")
     }
 
-    // Build URL using pure adapter logic
-    const result = buildKashierPaymentUrl(params)
+    // Get store-specific Kashier config if storeId provided
+    let kashierConfig: KashierConfig | undefined;
+    if (storeId) {
+      try {
+        kashierConfig = await getKashierConfigForStore(storeId);
+      } catch (error) {
+        console.error("[PaymentService] Error getting Kashier config for store:", error);
+        // Will fallback to environment variables in buildKashierPaymentUrl
+      }
+    }
+
+    // Build URL using store-specific config or env fallback
+    const result = buildKashierPaymentUrl(params, kashierConfig);
 
     // Save transaction to database
     try {

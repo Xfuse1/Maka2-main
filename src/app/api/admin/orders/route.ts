@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET(request: Request) {
   const supabase = getSupabaseAdminClient()
+  const storeId = await getStoreIdFromRequest()
+  
   const url = new URL(request.url)
   const qp = url.searchParams
   const limit = Math.max(Number(qp.get("limit") ?? 25), 1)
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
       billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, billing_country,
       notes, tracking_number, shipped_at, delivered_at, cancelled_at, created_at
     `)
+    .eq("store_id", storeId) // Filter by store for multi-tenant
     .order("created_at", { ascending: false })
     .range(from, to)
 

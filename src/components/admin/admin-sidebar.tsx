@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Home, Package, ShoppingBag, Settings, Palette, BarChart3, FileText, FolderTree, GalleryHorizontal, LogOut, X, Truck, Star } from "lucide-react"
+import { Home, Package, ShoppingBag, Settings, Palette, BarChart3, FileText, FolderTree, GalleryHorizontal, LogOut, X, Truck, Star, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SiteLogo } from "@/components/site-logo"
 import { Button } from "@/components/ui/button"
@@ -72,6 +72,11 @@ const menuItems = [
     title: "تكاليف الشحن",
     href: "/admin/shipping",
     icon: Truck,
+  },
+  {
+    title: "إعدادات الدفع",
+    href: "/admin/payment-settings",
+    icon: CreditCard,
   },
   {
     title: "الإعدادات",

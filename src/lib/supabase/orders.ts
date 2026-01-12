@@ -104,13 +104,15 @@ export async function getOrdersByEmail(identifier: string) {
 
 export async function getOrderItems(orderId: string) {
   if (!orderId) return []
-  const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from("order_items").select("*").eq("order_id", orderId)
-  if (error) {
-    console.error("[v0] Supabase getOrderItems error:", error)
+  // Use API route for store isolation
+  try {
+    const res = await fetch(`/api/admin/orders/${orderId}`)
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.order?.items || []
+  } catch {
     return []
   }
-  return data || []
 }
 
 export interface OrderSummary {

@@ -1,5 +1,6 @@
 
 import { createClient } from "@/lib/supabase/server";
+import { getStoreIdFromRequest } from "@/lib/supabase/admin";
 import AdminReviewsClient from "@/components/admin/AdminReviewsClient";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +8,13 @@ export const dynamic = "force-dynamic";
 async function getReviews(filterStatus?: 'all' | 'approved' | 'rejected' | 'pending') {
   try {
     const supabase: any = await createClient();
+    const storeId = await getStoreIdFromRequest();
+
+    // Fetch reviews first (without relationship) - FILTER BY STORE
     let query: any = supabase
       .from("product_reviews")
-      .select("*, product:products(name_ar)")
+      .select("*")
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false });
 
     // Apply server-side filter based on is_approved boolean
@@ -22,28 +27,35 @@ async function getReviews(filterStatus?: 'all' | 'approved' | 'rejected' | 'pend
       query = query.is('is_approved', null)
     }
 
-    const res: any = await query;
-
-    // Supabase returns { data, error, status, statusText }
-    const { data: reviews, error } = res || {};
+    const { data: reviews, error } = await query;
 
     if (error) {
-      // Log helpful error details when available
-      try {
-        console.error("Error fetching reviews:", {
-          message: error.message ?? String(error),
-          details: error.details ?? undefined,
-          hint: error.hint ?? undefined,
-          code: error.code ?? undefined,
-        });
-      } catch (logErr) {
-        console.error("Error fetching reviews (unknown error):", error);
-      }
+      console.error("Error fetching reviews:", {
+        message: error.message ?? String(error),
+        details: error.details ?? undefined,
+        hint: error.hint ?? undefined,
+        code: error.code ?? undefined,
+      });
       return [];
     }
 
-    if (!Array.isArray(reviews)) return [];
-    return reviews;
+    if (!Array.isArray(reviews) || reviews.length === 0) return [];
+
+    // Fetch product names separately (workaround for partitioned tables)
+    const productIds = [...new Set(reviews.map((r: { product_id: string }) => r.product_id))];
+    const { data: products } = await supabase
+      .from("products")
+      .select("id, name_ar")
+      .eq("store_id", storeId)
+      .in("id", productIds);
+
+    // Attach product info to reviews
+    const reviewsWithProducts = reviews.map((review: { product_id: string }) => ({
+      ...review,
+      product: (products || []).find((p: { id: string }) => p.id === review.product_id) || null
+    }));
+
+    return reviewsWithProducts;
   } catch (err) {
     console.error("Unexpected error in getReviews:", err instanceof Error ? { message: err.message, stack: err.stack } : err);
     return [];

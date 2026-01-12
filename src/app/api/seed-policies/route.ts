@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getStoreIdFromRequest, DEFAULT_STORE_ID } from "@/lib/supabase/admin";
 
 export async function POST() {
   try {
-    // Use service role to bypass RLS
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -15,15 +15,18 @@ export async function POST() {
       }
     );
     
-    // Optional: Check auth if needed, but useInitializePages might be called by anyone?
-    // Usually seeding is protected or run once.
-    // For now, I'll skip strict admin check to allow auto-seeding on app load if that's the pattern, 
-    // OR better, check if page exists and only insert if missing.
+    let storeId: string
+    try {
+      storeId = await getStoreIdFromRequest()
+    } catch {
+      storeId = DEFAULT_STORE_ID
+    }
     
-    // Check if policies page exists
+    // Check if policies page exists for this store
     const { data: existing } = await (supabase as any)
       .from("page_content")
       .select("id")
+      .eq("store_id", storeId)
       .or("page_path.eq./policies,page_path.eq.policies/")
       .maybeSingle();
 
@@ -33,6 +36,7 @@ export async function POST() {
 
     // Insert if not exists
     const { error } = await (supabase as any).from("page_content").insert({
+      store_id: storeId,
       page_path: "/policies",
       page_title_ar: "سياسات الموقع",
       page_title_en: "Site Policies",

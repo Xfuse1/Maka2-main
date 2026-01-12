@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET() {
   try {
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
-    // Fetch ViewContent events for the last 30 days
     const fromDate = new Date()
     fromDate.setDate(fromDate.getDate() - 30)
 
-    // Fetch relevant columns to aggregate
     const { data: events, error } = await supabase
       .from("analytics_events")
       .select("product_id, product_name, product_price, product_currency")
       .eq("event_name", "ViewContent")
+      .eq("store_id", storeId)
       .not("product_id", "is", null)
       .gte("created_at", fromDate.toISOString())
 

@@ -138,7 +138,7 @@ export function HeroSlider() {
                     size="lg"
                     className="bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6"
                   >
-                    <Link href={slides[currentSlide].link_url}>تسوق الآن</Link>
+                    <Link href={slides[currentSlide].link_url || "#"}>تسوق الآن</Link>
                   </Button>
                 </motion.div>
               )}

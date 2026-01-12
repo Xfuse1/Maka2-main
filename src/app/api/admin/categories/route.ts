@@ -1,18 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
+import { invalidateCategoryCache } from "@/lib/cache/categories-cache"
+import { revalidatePath } from "next/cache"
 
-// GET - Fetch all categories
+// Enable revalidation
+export const revalidate = 3600 // 1 hour (categories rarely change)
+
+// GET - Fetch all categories (filtered by store_id)
 export async function GET() {
   const supabase = createAdminClient()
-  const { data, error } = await supabase.from("categories").select("*").order("name_ar")
+  const storeId = await getStoreIdFromRequest()
+  
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("store_id", storeId) // Filter by store
+    .order("name_ar")
+    
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json({ data })
+  
+  return NextResponse.json({ data }, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+    }
+  })
 }
 
-// POST - Create a new category
+// POST - Create a new category (with store_id)
 export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
   const body = await request.json()
+  const storeId = await getStoreIdFromRequest()
+  
   // Ensure a slug exists and is safe
   const slugify = (input: any) => {
     if (!input) return ""
@@ -34,7 +53,10 @@ export async function POST(request: NextRequest) {
   // Try the insert; if slug unique constraint fails, retry once with timestamp suffix
   const tryInsert = async (candidateSlug: string) => {
     body.slug = candidateSlug
-    return await (supabase.from("categories") as any).insert([body]).select().single()
+    return await (supabase.from("categories") as any).insert([{
+      ...body,
+      store_id: storeId // Add store_id for multi-tenant
+    }]).select().single()
   }
 
   let candidate = body.slug
@@ -46,5 +68,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 400 })
+  
+  // Invalidate category cache after creation
+  invalidateCategoryCache(storeId)
+  revalidatePath('/admin/categories')
+  revalidatePath('/')
+  
   return NextResponse.json({ data: result.data }, { status: 201 })
 }

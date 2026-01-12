@@ -89,46 +89,29 @@ export async function deleteCategory(id: string) {
   }
 }
 
-// Get products count by category
+// Get products count by category (via API for store isolation)
 export async function getCategoryProductsCount(categoryId: string) {
-  const supabase = getSupabaseBrowserClient()
-
-  const { count, error } = await supabase
-    .from("products")
-    .select("*", { count: "exact", head: true })
-    .eq("category_id", categoryId)
-
-  if (error) {
-    console.error("[v0] Error counting products:", error)
-    throw error
+  try {
+    const res = await fetch('/api/admin/products')
+    if (!res.ok) return 0
+    const json = await res.json()
+    const products = json.data || []
+    return products.filter((p: any) => p.category_id === categoryId).length
+  } catch {
+    return 0
   }
-
-  return count || 0
 }
 
-// Get all active categories (for public display)
+// Get all active categories (via API for store isolation)
 export async function getActiveCategories() {
-  const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("is_active", true)
-    .order("display_order", { ascending: true })
-
-  if (error) {
-    // If this is a network-level failure (e.g. browser couldn't reach Supabase),
-    // log a helpful hint so you can check env / network quickly.
-    const msg = (() => {
-      try {
-        return error?.message ?? JSON.stringify(error)
-      } catch (e) {
-        return String(error)
-      }
-    })()
-
-    // Return empty array so pages using categories can render safely
+  try {
+    const res = await fetch('/api/admin/categories')
+    if (!res.ok) return []
+    const json = await res.json()
+    const categories = json.data || []
+    return categories.filter((c: Category) => c.is_active) as Category[]
+  } catch (err) {
+    console.error("[v0] Error fetching categories:", err)
     return []
   }
-
-  return data as Category[]
 }

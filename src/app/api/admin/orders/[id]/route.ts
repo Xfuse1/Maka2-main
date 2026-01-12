@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 const STOCK_HOLDING_STATUSES = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'confirmed']
 const STOCK_RELEASING_STATUSES = ['cancelled', 'returned', 'failed']
@@ -7,13 +7,15 @@ const STOCK_RELEASING_STATUSES = ['cancelled', 'returned', 'failed']
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { status: newStatus } = await request.json()
-  const supabase = getSupabaseAdminClient() as any // service-role client
+  const supabase = getSupabaseAdminClient() as any
+  const storeId = await getStoreIdFromRequest()
 
-  // 1. Fetch current order status and items
+  // 1. Fetch current order status and items (verify store ownership)
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("*, order_items(*)")
     .eq("id", id)
+    .eq("store_id", storeId) // Verify order belongs to current store
     .single()
 
   if (fetchError || !order) {
@@ -123,9 +125,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = getSupabaseAdminClient() as any
+  const storeId = await getStoreIdFromRequest()
 
-  // fetch order row
-  const { data: order, error: orderError } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
+  // fetch order row (verify store ownership)
+  const { data: order, error: orderError } = await supabase.from('orders').select('*').eq('id', id).eq('store_id', storeId).maybeSingle()
   if (orderError) {
     return NextResponse.json({ error: orderError.message ?? JSON.stringify(orderError) }, { status: 500 })
   }
@@ -146,8 +149,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = getSupabaseAdminClient() as any
+  const storeId = await getStoreIdFromRequest()
 
   try {
+    // First verify order belongs to this store
+    const { data: order, error: verifyError } = await supabase.from('orders').select('id').eq('id', id).eq('store_id', storeId).maybeSingle()
+    if (verifyError || !order) {
+      return NextResponse.json({ error: `Order not found or access denied` }, { status: 404 })
+    }
+
     // delete order items first
     const { error: itemsError } = await supabase.from('order_items').delete().eq('order_id', id)
     if (itemsError) {
@@ -155,7 +165,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     // delete the order row
-    const { data, error } = await supabase.from('orders').delete().eq('id', id).select().maybeSingle()
+    const { data, error } = await supabase.from('orders').delete().eq('id', id).eq('store_id', storeId).select().maybeSingle()
     if (error) {
       return NextResponse.json({ error: error.message ?? JSON.stringify(error) }, { status: 500 })
     }

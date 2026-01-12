@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 type RouteParams = { params: Promise<{ id: string }> }
 
-// GET - Fetch category by ID
+// GET - Fetch category by ID (with store verification)
 export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params
     const supabase = createAdminClient()
-    const { data, error } = await supabase.from("categories").select("*").eq("id", id).single()
+    const storeId = await getStoreIdFromRequest()
+    
+    const { data, error } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("id", id)
+      .eq("store_id", storeId)
+      .single()
 
     if (error) throw error
 
@@ -19,19 +26,21 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 }
 
-// PATCH - Update category
+// PATCH - Update category (with store verification)
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params
     const supabase = createAdminClient()
+    const storeId = await getStoreIdFromRequest()
     const body = await request.json()
-    const { data, error } = await (supabase
-      .from("categories") as any)
-      .update({
-        ...body,
-        updated_at: new Date().toISOString(),
-      })
+    
+    // Prevent changing store_id
+    delete body.store_id
+    
+    const { data, error } = await (supabase.from("categories") as any)
+      .update({ ...body, updated_at: new Date().toISOString() })
       .eq("id", id)
+      .eq("store_id", storeId)
       .select()
       .single()
 
@@ -44,11 +53,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 }
 
-// DELETE - Delete category
+// DELETE - Delete category (with store verification)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params
   const supabase = createAdminClient()
-  const { error } = await supabase.from("categories").delete().eq("id", id)
+  const storeId = await getStoreIdFromRequest()
+  
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", id)
+    .eq("store_id", storeId)
+    
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ success: true })
 }

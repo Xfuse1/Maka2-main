@@ -4,7 +4,7 @@ import type { KashierPaymentParams } from "@/services/payment/kashier-adapter"
 import { rateLimiter } from "@/services/payment/rate-limiter"
 import { auditLogger } from "@/services/payment/audit-logger"
 import { createClient } from "@/lib/supabase/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export const dynamic = "force-dynamic"
 
@@ -18,6 +18,16 @@ const getClientIp = (request: NextRequest) =>
 export async function POST(request: NextRequest) {
   try {
     const ipAddress = getClientIp(request)
+
+    // Get store ID from request (subdomain)
+    const storeId = await getStoreIdFromRequest(request)
+    
+    if (!storeId) {
+      return NextResponse.json(
+        { success: false, error: "Store not found" },
+        { status: 400 }
+      )
+    }
 
     const rateCheck = await rateLimiter.checkRateLimit("ip", ipAddress || "unknown")
     if (!rateCheck.allowed) {
@@ -169,10 +179,11 @@ export async function POST(request: NextRequest) {
           currency,
           customerEmail,
           customerName,
+          storeId, // Pass store ID for dynamic keys
         }
 
-        // Call the service to generate payment URL using the new adapter
-        const result = await paymentService.initiateKashierPayment(kashierParams)
+        // Call the service to generate payment URL using store-specific config
+        const result = await paymentService.initiateKashierPayment(kashierParams, storeId)
 
         await auditLogger.logPaymentCreated({
           transactionId: result.transactionId,

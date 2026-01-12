@@ -26,7 +26,7 @@ const DEFAULT_CONTACT_INFO: ContactInfoConfig = {
   phone: "01234567890",
   whatsapp: "01234567890",
   whatsappSubtitle: "تواصل عبر واتساب",
-  email: "info@mecca-fashion.com",
+  email: "info@yourstore.com",
   address: "القاهرة، مصر",
   workingHours: "السبت - الخميس: 9:00 ص - 9:00 م\nالجمعة: 2:00 م - 9:00 م"
 };

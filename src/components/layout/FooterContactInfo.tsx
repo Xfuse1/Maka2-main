@@ -15,7 +15,7 @@ export type ContactInfoConfig = {
 const defaultContactInfo: ContactInfoConfig = {
   phone: "01234567890",
   whatsapp: "01234567890",
-  email: "info@mecca-fashion.com",
+  email: "info@yourstore.com",
   address: "",
   workingHours: "",
   subtitle: "للاستفسارات والطلبات الخاصة",

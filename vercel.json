@@ -2,5 +2,9 @@
   "framework": "nextjs",
   "buildCommand": "pnpm build",
   "devCommand": "pnpm dev",
-  "installCommand": "pnpm install"
+  "installCommand": "pnpm install",
+  "env": {
+    "NEXT_PUBLIC_ENABLE_MULTI_TENANT": "true",
+    "NEXT_PUBLIC_PLATFORM_DOMAIN": "makastore.com"
+  }
 }

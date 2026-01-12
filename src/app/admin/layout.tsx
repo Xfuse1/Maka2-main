@@ -3,7 +3,7 @@ import { AdminLayoutShell } from "@/components/admin/admin-layout-shell"
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const settings = await getStoreSettingsServer()
-  const storeName = settings?.store_name ?? "مكة"
+  const storeName = settings?.store_name ?? "متجرك"
 
   return (
     <AdminLayoutShell storeName={storeName}>

@@ -1,11 +1,8 @@
-import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-
-// Use a fixed UUID to be compatible with uuid column type if migration to text hasn't run
-const SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
+import { createAdminClient, getStoreIdFromRequest, DEFAULT_STORE_ID } from "@/lib/supabase/admin"
 
 export interface StoreSettings {
   id: string
+  store_id: string
   store_name: string
   store_description: string
   updated_at?: string
@@ -13,15 +10,19 @@ export interface StoreSettings {
 }
 
 export async function getStoreSettingsServer(): Promise<StoreSettings | null> {
-  // Use admin client to avoid RLS/permission issues when reading global settings
   const supabase = createAdminClient()
+  
+  let storeId: string
+  try {
+    storeId = await getStoreIdFromRequest()
+  } catch {
+    storeId = DEFAULT_STORE_ID
+  }
 
-  // Robust fetch: get the latest updated row regardless of ID
   const { data, error } = await (supabase
     .from("store_settings") as any)
-    .select("id, store_name, store_description, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(1)
+    .select("id, store_id, store_name, store_description, updated_at")
+    .eq("store_id", storeId)
     .maybeSingle()
 
   if (error) {
@@ -37,18 +38,25 @@ export async function upsertStoreSettingsServer(
   storeName: string,
   storeDescription: string
 ) {
-  // Use admin client to bypass RLS for settings updates (assuming auth check is done in layout/middleware)
   const supabase = createAdminClient()
+  
+  let storeId: string
+  try {
+    storeId = await getStoreIdFromRequest()
+  } catch {
+    storeId = DEFAULT_STORE_ID
+  }
+
   const { data, error } = await (supabase
     .from("store_settings") as any)
     .upsert(
       {
-        id: SETTINGS_ID,
+        store_id: storeId,
         store_name: storeName,
         store_description: storeDescription,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "id" }
+      { onConflict: "store_id" }
     )
     .select()
     .maybeSingle()

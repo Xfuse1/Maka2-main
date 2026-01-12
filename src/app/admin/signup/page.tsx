@@ -40,6 +40,7 @@ export default function AdminSignupPage() {
           email,
           password,
           fullName,
+          secretCode,  // Send secret code to API for server-side verification
         })
       })
 

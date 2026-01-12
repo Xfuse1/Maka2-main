@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,27 +16,36 @@ export async function GET(request: NextRequest) {
     const prevFrom = new Date(from.getTime() - duration)
 
     const supabase = getSupabaseAdminClient()
+    const storeId = await getStoreIdFromRequest()
 
-    // Fetch Current Period Orders
+    // Fetch Current Period Orders (filtered by store)
     const { data: currentOrders, error: currentError } = await supabase
       .from("orders")
       .select("total, created_at")
+      .eq("store_id", storeId)
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .not("status", "in", '("cancelled","returned","refunded")')
 
-    // Fetch Previous Period Orders
+    // Fetch Previous Period Orders (filtered by store)
     const { data: prevOrders, error: prevError } = await supabase
       .from("orders")
       .select("total")
+      .eq("store_id", storeId)
       .gte("created_at", prevFrom.toISOString())
       .lte("created_at", prevTo.toISOString())
       .not("status", "in", '("cancelled","returned","refunded")')
 
-    // Fetch Total Products & Customers (Total counts, not time-bound for now, or maybe time-bound for growth?)
-    // Instructions say: "products: { total: number }"
-    const { count: totalProducts } = await supabase.from("products").select("*", { count: "exact", head: true })
-    const { count: totalCustomers } = await supabase.from("customers").select("*", { count: "exact", head: true })
+    // Fetch Total Products & Customers (filtered by store)
+    const { count: totalProducts } = await supabase
+      .from("products")
+      .select("*", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      
+    const { count: totalCustomers } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true })
+      .eq("store_id", storeId)
 
     if (currentError || prevError) {
       return NextResponse.json({ error: currentError?.message || prevError?.message }, { status: 500 })

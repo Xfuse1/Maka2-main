@@ -1,0 +1,28 @@
+{
+  "name": "maka-store",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    
+    "db:setup": "node scripts/setup-database-pg.js",
+    "db:migrate": "node scripts/setup-database-pg.js",
+    "db:seed": "node scripts/seed-database.js",
+    
+    "deploy": "node scripts/deploy-vercel.js",
+    "deploy:prod": "node scripts/deploy-vercel.js --production",
+    
+    "vercel:env": "vercel env pull .env.local",
+    "vercel:link": "vercel link"
+  },
+  "dependencies": {
+    "existing dependencies...": "..."
+  },
+  "devDependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  }
+}

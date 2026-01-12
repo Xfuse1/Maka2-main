@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
-// GET: يرجّع settings بشكل موحّد للفرونت
+// GET: returns settings for current store
 export async function GET() {
   try {
     const supabase = getSupabaseAdminClient() as any
+    const storeId = await getStoreIdFromRequest()
 
     const { data, error } = await supabase
       .from("design_settings")
       .select(
         "primary_color, secondary_color, background_color, text_color, heading_font, body_font, site_key"
       )
-      .eq("site_key", "default")
+      .eq("store_id", storeId)
       .maybeSingle()
 
     if (error) {
@@ -20,7 +21,6 @@ export async function GET() {
     }
 
     if (!data) {
-      console.warn("[API getDesignSettings] No design_settings row found")
       return NextResponse.json({ settings: {} })
     }
 
@@ -35,8 +35,7 @@ export async function GET() {
         heading: data.heading_font,
         body: data.body_font,
       },
-      layout: {}, // مفيش أعمدة ليه حالياً
-      // تقدر تضيف logoUrl بعدين باستخدام logo_bucket + logo_path
+      layout: {},
     }
 
     return NextResponse.json({ settings })
@@ -46,14 +45,13 @@ export async function GET() {
   }
 }
 
-// POST: يحفظ جزء من الإعدادات (colors | fonts | layout)
+// POST: saves settings for current store
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { key, value } = body
 
     if (!key || typeof value === "undefined") {
-      console.error("[design_settings POST] Missing key or value")
       return NextResponse.json(
         { error: "Missing key or value" },
         { status: 400 }
@@ -61,8 +59,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdminClient() as any
+    const storeId = await getStoreIdFromRequest()
 
     const updateData: any = {
+      store_id: storeId,
       site_key: "default",
       updated_at: new Date().toISOString(),
     }
@@ -81,27 +81,25 @@ export async function POST(request: NextRequest) {
         break
 
       case "layout":
-        // لسه مفيش أعمدة layout في الجدول، سيبه فاضي دلوقتي
         break
 
       default:
-        console.error("[design_settings POST] Unsupported key:", key)
         return NextResponse.json(
-          { error: "نوع إعداد غير مدعوم" },
+          { error: "Unsupported setting type" },
           { status: 400 }
         )
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("design_settings")
-      .upsert(updateData, { onConflict: "site_key" })
+      .upsert(updateData, { onConflict: "store_id" })
       .select()
       .maybeSingle()
 
     if (error) {
       console.error("[design_settings POST] Supabase error:", error)
       return NextResponse.json(
-        { error: "فشل حفظ إعدادات التصميم" },
+        { error: "Failed to save design settings" },
         { status: 400 }
       )
     }
@@ -110,7 +108,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[design_settings POST] Unexpected error:", error)
     return NextResponse.json(
-      { error: "حدث خطأ غير متوقع" },
+      { error: "Unexpected error occurred" },
       { status: 500 }
     )
   }

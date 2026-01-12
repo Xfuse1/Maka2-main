@@ -20,54 +20,52 @@ export interface PageContent {
 // Static pages that should appear in page management
 const STATIC_PAGE_PATHS = ["/about", "/contact", "/terms", "/privacy", "/return-policy", "/faq"]
 
-// Get all static pages (client-side)
+// Get all static pages (via API for store isolation)
 export async function getAllStaticPages(): Promise<PageContent[]> {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .from("page_content")
-    .select("*")
-    .in("page_path", STATIC_PAGE_PATHS)
-    .order("page_path")
-
-  if (error) {
-    console.error("[v0] Error fetching pages:", error)
+  try {
+    const res = await fetch('/api/admin/pages')
+    if (!res.ok) {
+      console.error("[v0] Error fetching pages: HTTP", res.status)
+      return []
+    }
+    const pages = await res.json()
+    // API returns array directly
+    const pagesArray = Array.isArray(pages) ? pages : pages.data || []
+    return pagesArray.filter((p: PageContent) => STATIC_PAGE_PATHS.includes(p.page_path))
+  } catch (err) {
+    console.error("[v0] Error fetching pages:", err)
     return []
   }
-
-  return data || []
 }
 
-// Get page by path (client-side)
+// Get page by path (via API for store isolation)
 export async function getPageByPath(path: string): Promise<PageContent | null> {
-  const supabase = createClient()
-
-  const { data, error } = await supabase.from("page_content").select("*").eq("page_path", path).single()
-
-  if (error) {
-    console.error("[v0] Error fetching page:", error)
+  try {
+    const res = await fetch('/api/admin/pages')
+    if (!res.ok) return null
+    const pages = await res.json()
+    const pagesArray = Array.isArray(pages) ? pages : pages.data || []
+    return pagesArray.find((p: PageContent) => p.page_path === path) || null
+  } catch (err) {
+    console.error("[v0] Error fetching page:", err)
     return null
   }
-
-  return data
 }
 
-// Get published pages for storefront (client-side)
+// Get published pages for storefront (via API for store isolation)
 export async function getPublishedPages(): Promise<Pick<PageContent, "id" | "page_path" | "page_title_ar">[]> {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .from("page_content")
-    .select("id, page_path, page_title_ar")
-    .eq("is_published", true)
-    .order("page_path")
-
-  if (error) {
-    console.error("[v0] Error fetching published pages:", error)
+  try {
+    const res = await fetch('/api/admin/pages')
+    if (!res.ok) return []
+    const pages = await res.json()
+    const pagesArray = Array.isArray(pages) ? pages : pages.data || []
+    return pagesArray
+      .filter((p: PageContent) => p.is_published)
+      .map((p: PageContent) => ({ id: p.id, page_path: p.page_path, page_title_ar: p.page_title_ar }))
+  } catch (err) {
+    console.error("[v0] Error fetching published pages:", err)
     return []
   }
-
-  return data || []
 }
 
 // Admin functions (server-side via API routes)

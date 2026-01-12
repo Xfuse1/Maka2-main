@@ -5,6 +5,17 @@ export async function clearClientData() {
     try { localStorage.clear() } catch (e) { /* ignore */ }
     try { sessionStorage.clear() } catch (e) { /* ignore */ }
 
+    // Clear server-side cache via API (for logout - clear all)
+    try {
+      await fetch('/api/admin/cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clearAll' }),
+      });
+    } catch (e) {
+      // Server cache clear is best-effort
+    }
+
     // Clear Cache Storage
     if (typeof caches !== 'undefined') {
       try {
@@ -55,6 +66,43 @@ export async function clearClientData() {
     }
   } catch (outer) {
     // ignore
+  }
+}
+
+/**
+ * Clear user-specific cache on login
+ * Only clears user-related data, keeps product/category cache
+ */
+export async function clearUserCacheOnLogin(): Promise<void> {
+  try {
+    // Clear user-specific patterns from server cache
+    const userPatterns = ['user-', 'order', 'profile', 'cart', 'addresses', 'wishlist'];
+    
+    await Promise.all(
+      userPatterns.map(pattern =>
+        fetch('/api/admin/cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invalidatePattern', pattern }),
+        }).catch(() => { /* ignore */ })
+      )
+    );
+
+    // Clear user-specific tags
+    const userTags = ['orders', 'user-profile', 'user-addresses', 'user-cart'];
+    await Promise.all(
+      userTags.map(tag =>
+        fetch('/api/admin/cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invalidateTag', tag }),
+        }).catch(() => { /* ignore */ })
+      )
+    );
+
+    console.log('[Client] User cache cleared on login');
+  } catch (e) {
+    // Best effort - ignore errors
   }
 }
 

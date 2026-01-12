@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 
 const json = (data: any, status = 200) =>
   new NextResponse(JSON.stringify(data), {
@@ -20,36 +20,28 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('[Contact API] missing Supabase service role key - cannot insert')
-      return json({ success: false, error: 'Server misconfiguration: missing Supabase service role key' }, 500)
-    }
+    const storeId = await getStoreIdFromRequest()
 
     const payload: any = {
+      store_id: storeId,
       full_name: name || null,
       email: email || null,
       phone: phone || null,
       message,
     }
 
-    // remove nulls so we don't attempt to set absent columns
+    // Remove nulls except store_id
     Object.keys(payload).forEach((k) => {
-      if (payload[k] === null || payload[k] === undefined) delete payload[k]
+      if (k !== 'store_id' && (payload[k] === null || payload[k] === undefined)) delete payload[k]
     })
 
-    // Perform a simple insert. Avoid relying on .select() which may be blocked by RLS for the role.
     const insertResult: any = await (supabase.from("contact_messages") as any).insert([payload])
 
-    const insertError = insertResult?.error
-    if (insertError) {
-      console.error('[Contact API] insert error:', insertError)
-      return json({ success: false, error: insertError.message || String(insertError) }, 500)
+    if (insertResult?.error) {
+      console.error('[Contact API] insert error:', insertResult.error)
+      return json({ success: false, error: insertResult.error.message || String(insertResult.error) }, 500)
     }
 
-    // If no error, assume insert succeeded. We may not have returned row data due to RLS/select restrictions.
     return json({ success: true }, 200)
   } catch (err: any) {
     console.error("[Contact API] uncaught:", err)
