@@ -1,10 +1,23 @@
 {
   "framework": "nextjs",
-  "buildCommand": "pnpm build",
-  "devCommand": "pnpm dev",
-  "installCommand": "pnpm install",
-  "env": {
-    "NEXT_PUBLIC_ENABLE_MULTI_TENANT": "true",
-    "NEXT_PUBLIC_PLATFORM_DOMAIN": "makastore.com"
-  }
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "x-forwarded-host",
+          "value": "$host"
+        }
+      ]
+    }
+  ]
 }
