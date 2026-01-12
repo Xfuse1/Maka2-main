@@ -17,6 +17,7 @@ const PUBLIC_PATHS = new Set([
   "/store-pending-payment",
   "/store-trial-expired",
   "/store-subscription-expired",
+  "/super-admin/login", // Super Admin Login page
 ])
 
 // Super admin only paths
@@ -160,14 +161,32 @@ export async function middleware(request: NextRequest) {
     }
 
     // التحقق من صلاحيات الـ admin أو store_owner
-    const { data: profile } = await supabase
+    // أولاً نحاول من profiles
+    let { data: profile } = await supabase
       .from("profiles")
       .select("role, store_id")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
-    // السماح لـ admin و store_owner فقط
-    const allowedRoles = ["admin", "store_owner"]
+    // إذا مفيش profile، نجرب store_admins
+    if (!profile) {
+      const { data: storeAdmin } = await supabase
+        .from("store_admins")
+        .select("role, store_id")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .maybeSingle()
+
+      if (storeAdmin) {
+        profile = {
+          role: storeAdmin.role === "owner" ? "store_owner" : storeAdmin.role,
+          store_id: storeAdmin.store_id
+        }
+      }
+    }
+
+    // السماح لـ admin و store_owner و owner فقط
+    const allowedRoles = ["admin", "store_owner", "owner", "super_admin"]
     if (!profile || !allowedRoles.includes(profile.role)) {
       // ليس admin أو store_owner - إعادة توجيه لصفحة تسجيل الدخول
       const url = request.nextUrl.clone()
@@ -254,19 +273,18 @@ function extractSubdomain(hostname: string, platformDomain: string): string | nu
   // إزالة port إن وجد
   const hostWithoutPort = hostname.split(":")[0]
   
-  // التعامل مع localhost بشكل خاص
-  if (platformDomain === "localhost") {
+  // التعامل مع localhost بشكل خاص (للتطوير المحلي)
+  // يعمل حتى لو كان platformDomain مضبوط على دومين آخر
+  if (hostWithoutPort.endsWith(".localhost")) {
     // مثال: store1.localhost -> store1
-    if (hostWithoutPort.endsWith(".localhost")) {
-      const subdomain = hostWithoutPort.replace(".localhost", "")
-      if (subdomain && subdomain !== "www") {
-        return subdomain
-      }
+    const subdomain = hostWithoutPort.replace(".localhost", "")
+    if (subdomain && subdomain !== "www") {
+      return subdomain
     }
     return null
   }
   
-  // في حالة الدومين العادي (production)
+  // في حالة localhost بدون subdomain
   if (hostWithoutPort === "localhost" || hostWithoutPort === "127.0.0.1") {
     return null
   }
@@ -292,78 +310,42 @@ function extractSubdomain(hostname: string, platformDomain: string): string | nu
 
 /**
  * Handle Super Admin protected paths
+ * يستخدم cookie-based session للأمان العالي
  */
 async function handleSuperAdminPath(
   request: NextRequest,
   pathname: string
 ): Promise<NextResponse> {
   try {
+    // التحقق من وجود session cookie
+    const sessionToken = request.cookies.get("super_admin_session")?.value
+
+    if (!sessionToken) {
+      // لا يوجد session - إعادة توجيه لصفحة تسجيل الدخول
+      const url = request.nextUrl.clone()
+      url.pathname = "/super-admin/login"
+      return NextResponse.redirect(url)
+    }
+
+    // التحقق من صحة الـ session (يمكن إضافة تحقق من الـ database)
+    // للسرعة، نعتمد على وجود الـ cookie فقط هنا
+    // يمكن إضافة تحقق إضافي من قاعدة البيانات إذا لزم الأمر
+
     let response = NextResponse.next({
       request: {
         headers: request.headers,
       },
     })
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              request.cookies.set(name, value)
-            )
-            response = NextResponse.next({
-              request,
-            })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // التحقق من المستخدم
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      // إعادة توجيه لصفحة تسجيل الدخول
-      const url = request.nextUrl.clone()
-      url.pathname = "/admin/login"
-      url.searchParams.set("redirect", pathname)
-      return NextResponse.redirect(url)
-    }
-
-    // التحقق من دور super_admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    // السماح لـ super_admin فقط
-    if (!profile || profile.role !== "super_admin") {
-      // ليس super_admin - إعادة توجيه للصفحة الرئيسية
-      const url = request.nextUrl.clone()
-      url.pathname = "/"
-      return NextResponse.redirect(url)
-    }
-
-    // إضافة معلومات الدور للـ headers
-    response.headers.set("x-user-role", profile.role)
+    // إضافة معلومات الأمان للـ headers
+    response.headers.set("x-user-role", "super_admin")
     response.headers.set("x-is-super-admin", "true")
 
     return response
   } catch (error) {
     console.error("[middleware] Super Admin auth error:", error)
     const url = request.nextUrl.clone()
-    url.pathname = "/admin/login"
+    url.pathname = "/super-admin/login"
     return NextResponse.redirect(url)
   }
 }

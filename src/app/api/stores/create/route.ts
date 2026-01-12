@@ -6,12 +6,12 @@ export async function POST(request: NextRequest) {
   try {
     // الحصول على البيانات من الطلب
     const body = await request.json()
-    const { store_name, subdomain, slug, email, phone, description, plan_id } = body
+    const { store_name, subdomain, slug, email, password, phone, description, plan_id } = body
 
     // التحقق من البيانات المطلوبة
-    if (!store_name || !subdomain || !slug || !email) {
+    if (!store_name || !subdomain || !slug || !email || !password) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields (store_name, subdomain, email, password)" },
         { status: 400 }
       )
     }
@@ -25,44 +25,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // إنشاء Supabase client للتحقق من المستخدم
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              request.cookies.set(name, value)
-            )
-          },
-        },
-      }
-    )
-
-    // التحقق من تسجيل الدخول
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    // التحقق من طول كلمة المرور
+    if (password.length < 6) {
       return NextResponse.json(
-        { error: "Unauthorized. Please login first." },
-        { status: 401 }
+        { error: "Password must be at least 6 characters" },
+        { status: 400 }
       )
     }
 
     // استخدام Admin client للتجاوز RLS policies
     console.log("[API] Creating admin client...")
-    console.log("[API] SUPABASE_URL exists:", !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-    console.log("[API] SERVICE_ROLE_KEY exists:", !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-    console.log("[API] SERVICE_ROLE_KEY length:", process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0)
     
-    // Create admin client directly to bypass any type restrictions
     const { createClient } = await import("@supabase/supabase-js")
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,6 +63,59 @@ export async function POST(request: NextRequest) {
         { error: "Subdomain already taken" },
         { status: 400 }
       )
+    }
+
+    // التحقق من أن البريد الإلكتروني غير مستخدم
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+    const emailExists = existingUsers?.users?.some(u => u.email === email)
+    
+    if (emailExists) {
+      return NextResponse.json(
+        { error: "Email already registered. Please login or use another email." },
+        { status: 400 }
+      )
+    }
+
+    // إنشاء حساب المستخدم (مدير المتجر)
+    console.log("[API] Creating user account for:", email)
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // تأكيد البريد تلقائياً
+      user_metadata: {
+        role: "store_admin",
+        store_subdomain: subdomain,
+      }
+    })
+
+    if (authError || !authData.user) {
+      console.error("[API] Error creating user:", authError)
+      return NextResponse.json(
+        { error: "Failed to create admin account: " + (authError?.message || "Unknown error") },
+        { status: 500 }
+      )
+    }
+
+    const userId = authData.user.id
+    console.log("[API] User created with ID:", userId)
+
+    // إنشاء profile للمستخدم الجديد
+    const { error: profileCreateError } = await supabaseAdmin
+      .from("profiles")
+      .insert({
+        id: userId,
+        email: email,
+        role: "store_owner",
+        full_name: store_name + " Admin",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+    if (profileCreateError) {
+      console.error("[API] Error creating profile:", profileCreateError)
+      // لا نفشل العملية بسبب الـ profile
+    } else {
+      console.log("[API] Profile created for user:", userId)
     }
 
     // جلب بيانات الباقة إذا تم تحديدها
@@ -140,7 +166,7 @@ export async function POST(request: NextRequest) {
     const { data: newStore, error: createError } = await supabaseAdmin
       .from("stores")
       .insert({
-        owner_id: user.id,
+        owner_id: userId, // استخدام ID المستخدم الجديد
         store_name,
         subdomain,
         slug,
@@ -149,7 +175,6 @@ export async function POST(request: NextRequest) {
         description: description || null,
         status: subscriptionStatus === "trial" ? "active" : "inactive", // المتجر نشط فقط للتجربة
         subscription_status: subscriptionStatus,
-        subscription_plan_id: selectedPlan?.id || null,
         trial_ends_at: trialEndsAt,
         subscription_plan: selectedPlan?.name_en || "free", // للتوافق مع القديم
         commission_rate: 10.0, // عمولة 10%
@@ -161,6 +186,8 @@ export async function POST(request: NextRequest) {
 
     if (createError) {
       console.error("[API] Error creating store:", createError)
+      // حذف المستخدم إذا فشل إنشاء المتجر
+      await supabaseAdmin.auth.admin.deleteUser(userId)
       return NextResponse.json(
         { error: "Failed to create store: " + createError.message },
         { status: 500 }
@@ -205,17 +232,32 @@ export async function POST(request: NextRequest) {
       // لا نفشل العملية بأكملها
     }
 
-    // تحديث role المستخدم ليصبح store_owner وربطه بالمتجر
-    const { error: profileError } = await (supabaseAdmin as any)
+    // تحديث store_id في profile المستخدم
+    const { error: profileUpdateError } = await (supabaseAdmin as any)
       .from("profiles")
       .update({ 
-        role: "store_owner",
         store_id: (newStore as any).id  // ربط المستخدم بالمتجر
       })
-      .eq("id", user.id)
+      .eq("id", userId)
 
-    if (profileError) {
-      console.error("[API] Error updating profile role:", profileError)
+    if (profileUpdateError) {
+      console.error("[API] Error updating profile store_id:", profileUpdateError)
+    }
+
+    // إنشاء سجل store_admins لربط المستخدم كمدير للمتجر
+    const { error: adminError } = await supabaseAdmin
+      .from("store_admins")
+      .insert({
+        store_id: (newStore as any).id,
+        user_id: userId,
+        email: email,
+        role: "owner",
+        is_active: true,
+      } as any)
+
+    if (adminError) {
+      console.error("[API] Error creating store admin:", adminError)
+      // لا نفشل العملية بسبب هذا
     }
 
     // إنشاء سجل الاشتراك إذا كانت هناك باقة
@@ -230,9 +272,9 @@ export async function POST(request: NextRequest) {
           store_id: (newStore as any).id,
           plan_id: selectedPlan.id,
           status: selectedPlan.price === 0 ? "active" : "pending",
+          amount: selectedPlan.price,
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
-          amount_paid: selectedPlan.price === 0 ? 0 : null, // للمجاني فقط
           payment_method: selectedPlan.price === 0 ? "free" : null,
         } as any)
 
@@ -247,10 +289,18 @@ export async function POST(request: NextRequest) {
     // تحديد ما إذا كان يحتاج لدفع
     const requiresPayment = selectedPlan && selectedPlan.price > 0
 
+    console.log("[API] Store created successfully:", {
+      store_id: (newStore as any).id,
+      subdomain,
+      user_id: userId,
+      requires_payment: requiresPayment
+    })
+
     return NextResponse.json(
       {
         success: true,
         store: newStore,
+        user_id: userId,
         message: "تم إنشاء المتجر بنجاح!",
         store_url: `https://${subdomain}.${process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"}`,
         requires_payment: requiresPayment,

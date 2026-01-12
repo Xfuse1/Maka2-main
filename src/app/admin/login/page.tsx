@@ -39,30 +39,49 @@ export default function AdminLoginPage() {
       }
 
       console.log("✅ [LOGIN] Auth successful, user ID:", authData.user.id)
-      console.log("🔍 [LOGIN] Fetching profile for user:", authData.user.id)
+      console.log("🔍 [LOGIN] Fetching profile/store_admin for user:", authData.user.id)
 
-      const { data: profile, error: profileError } = await supabase
+      // أولاً: نحاول جلب الـ profile
+      let { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, store_id")
         .eq("id", authData.user.id)
-        .single() as { data: { role: string } | null, error: any }
+        .maybeSingle() as { data: { role: string, store_id: string | null } | null, error: any }
 
       console.log("📊 [LOGIN] Profile query result:", { profile, profileError })
 
-      if (profileError) {
-        console.error("❌ [LOGIN] Profile error:", profileError)
-        console.error("❌ [LOGIN] Error details:", JSON.stringify(profileError, null, 2))
-        throw new Error(`خطأ في جلب بيانات المستخدم: ${profileError.message || profileError.code}`)
+      // إذا مفيش profile، نحاول نجيب من store_admins
+      if (!profile) {
+        console.log("🔍 [LOGIN] No profile found, checking store_admins...")
+        const { data: storeAdmin, error: storeAdminError } = await supabase
+          .from("store_admins")
+          .select("role, store_id, email")
+          .eq("user_id", authData.user.id)
+          .eq("is_active", true)
+          .maybeSingle()
+
+        console.log("📊 [LOGIN] Store admin query result:", { storeAdmin, storeAdminError })
+
+        if (storeAdmin) {
+          // المستخدم موجود كـ store admin
+          profile = {
+            role: storeAdmin.role === "owner" ? "admin" : storeAdmin.role,
+            store_id: storeAdmin.store_id
+          }
+          console.log("✅ [LOGIN] Found store admin, mapped role:", profile.role)
+        }
       }
 
       if (!profile) {
-        console.error("❌ [LOGIN] No profile found for user")
-        throw new Error("لم يتم العثور على بيانات المستخدم")
+        console.error("❌ [LOGIN] No profile or store_admin found for user")
+        throw new Error("لم يتم العثور على بيانات المستخدم. تأكد من إنشاء متجر أولاً.")
       }
 
-      console.log("✅ [LOGIN] Profile found, role:", profile.role)
+      console.log("✅ [LOGIN] Profile/Admin found, role:", profile.role)
 
-      if (profile?.role !== "admin") {
+      // السماح لـ admin, store_owner, owner
+      const allowedRoles = ["admin", "store_owner", "owner", "super_admin"]
+      if (!allowedRoles.includes(profile.role)) {
         console.warn("⚠️ [LOGIN] User is not admin, role:", profile.role)
         await supabase.auth.signOut()
         throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")

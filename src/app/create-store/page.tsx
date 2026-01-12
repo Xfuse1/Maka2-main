@@ -17,7 +17,11 @@ import {
   ArrowRight,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail
 } from "lucide-react"
 import Link from "next/link"
 
@@ -46,11 +50,14 @@ function CreateStoreContent() {
   
   const [subdomainAvailable, setSubdomainAvailable] = useState<boolean | null>(null)
   const [checkingSubdomain, setCheckingSubdomain] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const [formData, setFormData] = useState({
     storeName: "",
     subdomain: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     phone: "",
     description: "",
   })
@@ -153,18 +160,21 @@ function CreateStoreContent() {
     setError(null)
 
     try {
-      // التحقق من تسجيل الدخول
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        setError("يجب تسجيل الدخول أولاً")
-        router.push(`/auth?redirect=/create-store${selectedPlanId ? `?plan=${selectedPlanId}` : ""}`)
+      // التحقق من صحة البيانات
+      if (!formData.storeName || !formData.subdomain || !formData.email || !formData.password) {
+        setError("يرجى ملء جميع الحقول المطلوبة")
+        setIsLoading(false)
         return
       }
 
-      // التحقق من صحة البيانات
-      if (!formData.storeName || !formData.subdomain || !formData.email) {
-        setError("يرجى ملء جميع الحقول المطلوبة")
+      if (formData.password.length < 6) {
+        setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+        setIsLoading(false)
+        return
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        setError("كلمات المرور غير متطابقة")
         setIsLoading(false)
         return
       }
@@ -181,7 +191,7 @@ function CreateStoreContent() {
         return
       }
 
-      // إنشاء المتجر
+      // إنشاء المتجر مع حساب المدير
       const response = await fetch("/api/stores/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,6 +200,7 @@ function CreateStoreContent() {
           subdomain: formData.subdomain,
           slug: formData.subdomain,
           email: formData.email,
+          password: formData.password,
           phone: formData.phone || null,
           description: formData.description || null,
           plan_id: selectedPlanId,
@@ -461,16 +472,79 @@ function CreateStoreContent() {
                 {/* البريد الإلكتروني */}
                 <div className="space-y-2">
                   <Label htmlFor="email">
-                    البريد الإلكتروني <span className="text-red-500">*</span>
+                    البريد الإلكتروني (للدخول للوحة التحكم) <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    type="email"
-                    id="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="store@example.com"
-                    required
-                  />
+                  <div className="relative">
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="email"
+                      id="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="admin@example.com"
+                      className="pr-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* كلمة المرور */}
+                <div className="space-y-2">
+                  <Label htmlFor="password">
+                    كلمة المرور <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="pr-10 pl-10"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">على الأقل 6 أحرف</p>
+                </div>
+
+                {/* تأكيد كلمة المرور */}
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">
+                    تأكيد كلمة المرور <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      id="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      placeholder="••••••••"
+                      className="pr-10"
+                      required
+                    />
+                  </div>
+                  {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <XCircle className="w-3 h-3" />
+                      كلمات المرور غير متطابقة
+                    </p>
+                  )}
+                  {formData.confirmPassword && formData.password === formData.confirmPassword && (
+                    <p className="text-xs text-green-500 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      كلمات المرور متطابقة
+                    </p>
+                  )}
                 </div>
 
                 {/* رقم الهاتف */}
