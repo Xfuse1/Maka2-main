@@ -52,11 +52,60 @@ export async function POST(request: NextRequest) {
 
     console.log("[CREATE-ADMIN] User created successfully:", data.user.id)
 
-    // إنشاء profile مع role = admin
+    // Get default store or create one
+    const { data: storeData, error: storeError } = await supabaseAdmin
+      .from("stores")
+      .select("id")
+      .limit(1)
+      .single()
+
+    let storeId = storeData?.id
+
+    // If no store exists, create a default one
+    if (!storeId) {
+      console.log("[CREATE-ADMIN] No store found, creating default store")
+      const { data: newStore, error: createStoreError } = await supabaseAdmin
+        .from("stores")
+        .insert({
+          subdomain: "default",
+          store_name: "Default Store",
+          owner_id: data.user.id,
+          status: "active",
+        })
+        .select("id")
+        .single()
+
+      if (createStoreError) {
+        console.error("[CREATE-ADMIN] Failed to create default store:", createStoreError)
+        // Try to get any existing store as fallback
+        const { data: fallbackStore } = await supabaseAdmin
+          .from("stores")
+          .select("id")
+          .limit(1)
+          .single()
+        
+        storeId = fallbackStore?.id
+      } else {
+        storeId = newStore.id
+      }
+    }
+
+    if (!storeId) {
+      console.error("[CREATE-ADMIN] No store_id available")
+      return NextResponse.json({ 
+        error: "No store available. Please create a store first." 
+      }, { status: 500 })
+    }
+
+    console.log("[CREATE-ADMIN] Using store_id:", storeId)
+
+    // إنشاء profile مع role = admin AND store_id
     const profilePayload = {
       id: data.user.id,
       name: fullName,
+      email: email,
       role: "admin",
+      store_id: storeId, // ✅ CRITICAL: Must include store_id
     } as any
 
     console.log("[CREATE-ADMIN] Creating profile with payload:", profilePayload)
