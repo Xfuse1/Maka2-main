@@ -60,7 +60,15 @@ export async function middleware(request: NextRequest) {
     
     if (subdomain && subdomain !== "www" && subdomain !== "admin") {
       // هذا طلب لمتجر فرعي (subdomain)
-      return handleStoreSubdomain(request, subdomain)
+      // IMPORTANT: Allow API routes to pass through without subdomain handling
+      // API routes handle their own subdomain logic internally
+      if (!pathname.startsWith("/api/")) {
+        return handleStoreSubdomain(request, subdomain)
+      }
+      // For API routes from subdomains, add subdomain header and continue
+      const response = NextResponse.next()
+      response.headers.set("x-subdomain", subdomain)
+      return response
     }
   }
   
