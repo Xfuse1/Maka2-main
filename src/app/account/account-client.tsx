@@ -346,27 +346,50 @@ export function AccountClient({ user, profile }: AccountClientProps) {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {subscriptions.map(sub => (
-                      <div key={sub.id} className="p-4 border border-border rounded-2xl hover:bg-purple-50/50 transition-colors">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-bold text-lg">{getPlanName(sub.plan_id)}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              الفترة: {new Date(sub.start_date).toLocaleDateString('ar-EG')} - {new Date(sub.end_date).toLocaleDateString('ar-EG')}
-                            </p>
+                    {subscriptions.map(sub => {
+                      const store = stores.find(s => s.id === sub.store_id)
+                      return (
+                        <div key={sub.id} className="p-4 border border-border rounded-2xl hover:bg-purple-50/50 transition-colors">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              {/* اسم المتجر والرابط */}
+                              {store && (
+                                <div className="mb-3 pb-3 border-b border-border/50">
+                                  <h4 className="font-semibold text-base text-foreground">{store.store_name}</h4>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {store.subdomain}.xfuse.online
+                                  </p>
+                                </div>
+                              )}
+                              {/* اسم الخطة */}
+                              <h3 className="font-bold text-lg">{getPlanName(sub.plan_id)}</h3>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                الفترة: {new Date(sub.start_date).toLocaleDateString('ar-EG')} - {new Date(sub.end_date).toLocaleDateString('ar-EG')}
+                              </p>
+                            </div>
+                            {getStatusBadge(sub.status)}
                           </div>
-                          {getStatusBadge(sub.status)}
+                          <div className="flex justify-between items-center gap-4">
+                            <span className="text-sm text-muted-foreground">المبلغ: {sub.amount_paid} ج.م</span>
+                            <div className="flex gap-2">
+                              {store && (
+                                <Button variant="outline" size="sm" className="rounded-lg" asChild>
+                                  <a href={`https://${store.subdomain}.xfuse.online/admin`} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-4 w-4 ml-2" />
+                                    لوحة التحكم
+                                  </a>
+                                </Button>
+                              )}
+                              <Button variant="outline" size="sm" className="rounded-lg" asChild>
+                                <a href={`/subscription/plans?store_id=${sub.store_id}`}>
+                                  تجديد الاشتراك
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">المبلغ: {sub.amount_paid} ج.م</span>
-                          <Button variant="outline" size="sm" className="rounded-lg" asChild>
-                            <a href={`/subscription/plans`}>
-                              تجديد الاشتراك
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
