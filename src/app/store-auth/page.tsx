@@ -207,6 +207,13 @@ export default function StoreAuthPage() {
         .eq("store_id", store.id)
         .single()
 
+      // بناء redirect URL بشكل صريح باستخدام subdomain المتجر
+      const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
+      const isProduction = process.env.NODE_ENV === "production"
+      const redirectUrl = isProduction
+        ? `https://${store.subdomain}.${platformDomain}/auth/callback`
+        : `http://${store.subdomain}.localhost:3000/auth/callback`
+
       // إنشاء المستخدم مع metadata تحتوي على store_id
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -219,7 +226,7 @@ export default function StoreAuthPage() {
             store_subdomain: store.subdomain,
             role: "customer",
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectUrl,
         },
       })
 
