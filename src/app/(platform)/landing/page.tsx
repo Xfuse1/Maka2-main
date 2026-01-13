@@ -20,6 +20,7 @@ import {
   ShoppingBag
 } from "lucide-react"
 import Link from "next/link"
+import { SiteHeader } from "@/components/site-header"
 
 interface SubscriptionPlan {
   id: string
@@ -110,37 +111,9 @@ export default function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white" dir="rtl">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-reverse space-x-3">
-              <div className="bg-gradient-to-br from-purple-600 to-blue-600 p-2 rounded-xl">
-                <Store className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                XFuse
-              </span>
-            </div>
-            <nav className="hidden md:flex items-center space-x-reverse space-x-8">
-              <a href="#features" className="text-gray-600 hover:text-gray-900 transition">المميزات</a>
-              <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition">الأسعار</a>
-              <Link href="/auth" className="text-gray-600 hover:text-gray-900 transition">تسجيل الدخول</Link>
-              <Button asChild className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-                <Link href="/create-store">
-                  ابدأ الآن مجاناً
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                </Link>
-              </Button>
-            </nav>
-            <Button asChild className="md:hidden bg-gradient-to-r from-purple-600 to-blue-600">
-              <Link href="/create-store">ابدأ الآن</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <>
+      <SiteHeader />
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white" dir="rtl">
       {/* Hero Section */}
       <section className="py-20 md:py-32">
         <div className="container mx-auto px-6 text-center">
@@ -350,6 +323,7 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   )
 }

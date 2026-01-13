@@ -55,20 +55,45 @@ export default function ProfileDropdown({ user, profile }: Props) {
 
   return (
     <div className="relative" ref={ref}>
-      <Button variant="ghost" onClick={() => setOpen((s) => !s)} className="p-0 rounded-full">
+      <Button 
+        variant="ghost" 
+        onClick={() => setOpen((s) => !s)} 
+        className="p-0 rounded-full hover:bg-primary/10 transition-colors"
+        title="القائمة الشخصية"
+      >
         {profile?.image_url ? (
-          <img src={profile.image_url} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+          <img src={profile.image_url} alt="avatar" className="h-9 w-9 rounded-full object-cover border-2 border-primary/20" />
         ) : (
-          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">{initials}</div>
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-sm font-semibold text-primary border-2 border-primary/20">
+            {initials}
+          </div>
         )}
       </Button>
 
       {open && (
-        <div className="absolute ltr:right-0 rtl:left-0 mt-2 min-w-[160px] w-44 bg-background border border-border rounded-md shadow-lg z-50">
-          <nav className="flex flex-col">
-            <Link href="/account" className="block px-4 py-2 text-sm hover:bg-muted" onClick={() => setOpen(false)}>حسابي</Link>
-            <Link href="/orders" className="block px-4 py-2 text-sm hover:bg-muted" onClick={() => setOpen(false)}>طلباتي</Link>
-            <button className="w-full text-left px-4 py-2 text-sm hover:bg-muted" onClick={signOut}>تسجيل الخروج</button>
+        <div className="absolute ltr:right-0 rtl:left-0 mt-3 min-w-[200px] bg-background border border-border rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in-50 duration-200">
+          <div className="bg-gradient-to-r from-primary/10 to-transparent px-4 py-3 border-b border-border/50">
+            <p className="text-xs font-semibold text-muted-foreground">مرحباً</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.email}</p>
+          </div>
+          <nav className="flex flex-col py-1">
+            <Link 
+              href="/account" 
+              className="flex items-center gap-2 px-4 py-3 text-sm text-foreground hover:bg-primary/10 transition-colors" 
+              onClick={() => setOpen(false)}
+            >
+              <User className="h-4 w-4" />
+              حسابي وملفي الشخصي
+            </Link>
+            <button 
+              className="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-foreground hover:bg-red-50 hover:text-red-600 transition-colors border-t border-border/50" 
+              onClick={signOut}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              تسجيل الخروج
+            </button>
           </nav>
         </div>
       )}
