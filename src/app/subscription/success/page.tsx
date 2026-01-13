@@ -2,7 +2,6 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { createBrowserClient } from "@supabase/ssr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { 
@@ -21,43 +20,98 @@ function SubscriptionSuccessContent() {
   const orderId = searchParams.get("orderId")
   
   const [isLoading, setIsLoading] = useState(true)
+  const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "unknown">("unknown")
   const [store, setStore] = useState<{ store_name: string; subdomain: string } | null>(null)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Trigger confetti on mount
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    })
+    checkPaymentStatus()
+  }, [storeId, orderId])
 
-    loadStore()
-  }, [])
-
-  const loadStore = async () => {
-    if (!storeId) {
+  const checkPaymentStatus = async () => {
+    if (!storeId || !orderId) {
+      setError("معلومات الدفع غير كاملة")
+      setPaymentStatus("unknown")
       setIsLoading(false)
       return
     }
 
     try {
-      const { data } = await supabase
-        .from("stores")
-        .select("store_name, subdomain")
-        .eq("id", storeId)
-        .single()
+      // استخدام API route لتجاوز RLS
+      const response = await fetch(
+        `/api/payment/subscription/status?store_id=${storeId}&orderId=${orderId}`
+      )
+      const result = await response.json()
 
-      if (data) {
-        setStore(data)
+      if (!response.ok) {
+        console.error("Error checking subscription:", result.error)
+        setError("لم نتمكن من التحقق من حالة الدفع")
+        setPaymentStatus("unknown")
+        setIsLoading(false)
+        return
       }
+
+      const { subscription, isPaymentConfirmed, store: storeData } = result
+
+      if (!subscription) {
+        console.error("Subscription not found:", { storeId, orderId })
+        setError("لم نجد بيانات الدفع. قد لم يتم الدفع بعد.")
+        setPaymentStatus("unknown")
+        setIsLoading(false)
+        return
+      }
+
+      if (isPaymentConfirmed) {
+        setPaymentStatus("success")
+        if (storeData) setStore(storeData)
+        // Trigger confetti only on actual success
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+        })
+      } else if (subscription.status === "pending" || subscription.status === "active") {
+        // لم يتم التأكيد بعد - ننتظر webhook
+        setPaymentStatus("pending")
+        setError("جاري معالجة الدفع... قد يستغرق بضع ثوانٍ. يرجى عدم مغادرة الصفحة.")
+
+        // Poll for status change
+        const pollInterval = setInterval(async () => {
+          const pollResponse = await fetch(
+            `/api/payment/subscription/status?store_id=${storeId}&orderId=${orderId}`
+          )
+          const pollResult = await pollResponse.json()
+
+          if (pollResult.isPaymentConfirmed) {
+            clearInterval(pollInterval)
+            setPaymentStatus("success")
+            setError(null)
+            if (pollResult.store) setStore(pollResult.store)
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+            })
+          }
+        }, 3000)
+
+        // Stop polling after 2 minutes
+        setTimeout(() => clearInterval(pollInterval), 120000)
+        setIsLoading(false)
+        return
+      } else if (subscription.status === "failed") {
+        setPaymentStatus("failed")
+        setError("فشل الدفع. يرجى المحاولة مرة أخرى.")
+      } else {
+        setPaymentStatus("unknown")
+        setError(`حالة غير متوقعة: ${subscription.status}`)
+      }
+
+      setIsLoading(false)
     } catch (err) {
-      console.error("Error loading store:", err)
-    } finally {
+      console.error("Error checking payment status:", err)
+      setError("حدث خطأ في التحقق من الدفع")
+      setPaymentStatus("unknown")
       setIsLoading(false)
     }
   }
@@ -74,6 +128,69 @@ function SubscriptionSuccessContent() {
     )
   }
 
+  // Show error/pending state if payment not confirmed
+  if (paymentStatus !== "success") {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-white py-20 px-4" dir="rtl">
+        <div className="max-w-xl mx-auto text-center">
+          {paymentStatus === "pending" && (
+            <>
+              <div className="mb-8">
+                <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Loader2 className="w-14 h-14 text-yellow-600 animate-spin" />
+                </div>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                جاري معالجة الدفع... ⏳
+              </h1>
+            </>
+          )}
+
+          {paymentStatus === "failed" && (
+            <>
+              <div className="mb-8">
+                <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-4xl">❌</span>
+                </div>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-red-900 mb-4">
+                فشل الدفع
+              </h1>
+            </>
+          )}
+
+          {paymentStatus === "unknown" && (
+            <>
+              <div className="mb-8">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-4xl">❓</span>
+                </div>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                تعذر التحقق من الدفع
+              </h1>
+            </>
+          )}
+
+          <p className="text-xl text-gray-600 mb-8">
+            {error || "يرجى الانتظار..."}
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <Button onClick={checkPaymentStatus} className="bg-purple-600 hover:bg-purple-700">
+              <Loader2 className="w-4 h-4 ml-2" />
+              تحديث الحالة
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/create-store">العودة لإنشاء متجر جديد</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Success state - payment confirmed
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-20 px-4" dir="rtl">
       <div className="max-w-xl mx-auto text-center">

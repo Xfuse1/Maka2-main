@@ -144,8 +144,13 @@ export default function AuthPage() {
                   } catch (e) {
                     // Best effort - ignore errors
                   }
-                  // success -> navigate home
-                  router.push('/')
+                  // success -> navigate to next page or home
+                  const nextParam = searchParams.get('next')
+                  if (nextParam) {
+                    router.push(decodeURIComponent(nextParam))
+                  } else {
+                    router.push('/')
+                  }
                 } catch (err) {
                   console.error('[Auth] Login exception:', err)
                   showMessage((err as any)?.message || 'حدث خطأ غير متوقع')
@@ -266,12 +271,17 @@ export default function AuthPage() {
                         // Best effort - ignore errors
                       }
 
-                      // signed in successfully
+                      // signed in successfully - navigate to next page or home
                       showMessage('تم تسجيل الدخول بنجاح')
-                      // small delay so user sees the message then navigate home
+                      const nextParam = searchParams.get('next')
+                      // small delay so user sees the message then navigate
                       setTimeout(() => {
-                    router.push('/')
-                  }, 900)
+                        if (nextParam) {
+                          router.push(decodeURIComponent(nextParam))
+                        } else {
+                          router.push('/')
+                        }
+                      }, 900)
                 } catch (err) {
                   const msg = encodeURIComponent(json.message || 'تم إنشاء الحساب بنجاح. الرجاء تسجيل الدخول.')
                   router.replace(`/auth?message=${msg}&status=success`)

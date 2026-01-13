@@ -3,18 +3,65 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { humanizeOrderStatus, getStatusBadgeClass } from "@/lib/status"
 import { Button } from "@/components/ui/button"
-import { ShoppingBag, Package, TrendingUp, Users, Eye, ExternalLink } from "lucide-react"
+import { ShoppingBag, Package, TrendingUp, Users, Eye, ExternalLink, AlertTriangle, CheckCircle } from "lucide-react"
 import Image from "next/image"
 import { getAllProducts } from "@/lib/products-data"
 import Link from "next/link"
 import { useSettingsStore } from "@/store/settings-store"
+import { createBrowserClient } from "@supabase/ssr"
 
 export default function AdminDashboard() {
   const { settings, loadSettings } = useSettingsStore()
+  const [subscriptionStatus, setSubscriptionStatus] = useState<"active" | "pending" | "failed" | "unknown">("unknown")
+  const [storeId, setStoreId] = useState<string | null>(null)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  // Check subscription status
+  useEffect(() => {
+    const checkSubscriptionStatus = async () => {
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        // Get user's store
+        const { data: store } = await supabase
+          .from("stores")
+          .select("id, subscription_status")
+          .eq("owner_id", user.id)
+          .single()
+
+        if (store) {
+          setStoreId(store.id)
+          
+          // Check subscription status
+          const { data: subscription } = await supabase
+            .from("subscriptions")
+            .select("status")
+            .eq("store_id", store.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single()
+
+          if (subscription) {
+            setSubscriptionStatus(subscription.status)
+          }
+        }
+      } catch (err) {
+        console.error("Error checking subscription:", err)
+      }
+    }
+
+    checkSubscriptionStatus()
+  }, [])
 
   const products = getAllProducts()
   const [stats, setStats] = useState({
@@ -82,6 +129,57 @@ export default function AdminDashboard() {
           </Link>
         </Button>
       </div>
+
+      {/* Subscription Status Alert */}
+      {subscriptionStatus !== "active" && (
+        <div className={`mb-8 p-4 rounded-lg flex gap-4 border-2 ${
+          subscriptionStatus === "pending" 
+            ? "bg-yellow-50 border-yellow-200" 
+            : "bg-orange-50 border-orange-200"
+        }`}>
+          {subscriptionStatus === "pending" ? (
+            <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+          ) : (
+            <AlertTriangle className="w-6 h-6 text-orange-600 flex-shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1">
+            <h3 className={`font-bold mb-1 ${
+              subscriptionStatus === "pending" 
+                ? "text-yellow-900" 
+                : "text-orange-900"
+            }`}>
+              {subscriptionStatus === "pending" 
+                ? "🔄 اشتراكك قيد المعالجة" 
+                : "⚠️ متجرك غير نشط حالياً"}
+            </h3>
+            <p className={`text-sm mb-3 ${
+              subscriptionStatus === "pending" 
+                ? "text-yellow-800" 
+                : "text-orange-800"
+            }`}>
+              {subscriptionStatus === "pending"
+                ? "يتم معالجة طلب الدفع الخاص بك. قد يستغرق بضع دقائق. سيتم تفعيل متجرك تلقائياً عند تأكيد الدفع."
+                : "متجرك لم يتم تفعيله بعد. اختر باقة واشترك الآن لتفعيل متجرك والبدء في البيع على الإنترنت."}
+            </p>
+            <Button asChild className="gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800">
+              <Link href={`/subscription/plans${storeId ? `?store_id=${storeId}` : ""}`}>
+                ادفع الآن لتفعيل المتجر
+              </Link>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Active Subscription Badge */}
+      {subscriptionStatus === "active" && (
+        <div className="mb-8 p-4 rounded-lg bg-green-50 border-2 border-green-200 flex gap-3">
+          <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-bold text-green-900">✅ متجرك نشط ومفعل</h3>
+            <p className="text-sm text-green-800">اشتراكك نشط وجاهز. متجرك الآن متاح على الإنترنت.</p>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">

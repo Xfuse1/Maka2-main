@@ -11,7 +11,6 @@ const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|web
 const PUBLIC_PATHS = new Set([
   "/admin/login",
   "/admin/signup", 
-  "/create-store",
   "/landing",
   "/checkout/subscription",
   "/subscription/success",
@@ -463,6 +462,10 @@ async function getUserProfile(
 function redirectToLogin(request: NextRequest, loginPath: string): NextResponse {
   const url = request.nextUrl.clone()
   url.pathname = loginPath
+  // Add next parameter to return to the original page after login
+  if (!url.searchParams.has("next")) {
+    url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search)
+  }
   return NextResponse.redirect(url)
 }
 
@@ -548,30 +551,35 @@ async function handleStoreSubdomain(
 
     // Check subscription status
     const subscriptionStatus = store.subscription_status || "active"
+    const isAdminPath = pathname.startsWith("/admin")
 
-    if (subscriptionStatus === "pending_payment") {
-      return NextResponse.rewrite(new URL("/store-pending-payment", request.url))
-    }
-
-    if (subscriptionStatus === "trial" && store.trial_ends_at) {
-      if (new Date(store.trial_ends_at) < new Date()) {
-        return NextResponse.rewrite(new URL("/store-trial-expired", request.url))
+    // السماح دائماً بالوصول لصفحات admin حتى لو المتجر غير نشط
+    // صاحب المتجر يحتاج الدخول لرؤية بنر "ادفع الآن"
+    if (!isAdminPath) {
+      if (subscriptionStatus === "pending_payment") {
+        return NextResponse.rewrite(new URL("/store-pending-payment", request.url))
       }
-    }
 
-    if (subscriptionStatus === "expired") {
-      return NextResponse.rewrite(new URL("/store-subscription-expired", request.url))
-    }
-
-    // Check store status
-    if (store.status !== "active") {
-      const statusPages: Record<string, string> = {
-        suspended: "/store-suspended",
-        cancelled: "/store-cancelled",
+      if (subscriptionStatus === "trial" && store.trial_ends_at) {
+        if (new Date(store.trial_ends_at) < new Date()) {
+          return NextResponse.rewrite(new URL("/store-trial-expired", request.url))
+        }
       }
-      return NextResponse.rewrite(
-        new URL(statusPages[store.status] || "/store-pending", request.url)
-      )
+
+      if (subscriptionStatus === "expired") {
+        return NextResponse.rewrite(new URL("/store-subscription-expired", request.url))
+      }
+
+      // Check store status (لكن ليس لصفحات admin)
+      if (store.status !== "active") {
+        const statusPages: Record<string, string> = {
+          suspended: "/store-suspended",
+          cancelled: "/store-cancelled",
+        }
+        return NextResponse.rewrite(
+          new URL(statusPages[store.status] || "/store-pending", request.url)
+        )
+      }
     }
 
     // Redirect /auth to /store-auth

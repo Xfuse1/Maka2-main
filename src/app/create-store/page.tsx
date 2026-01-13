@@ -8,57 +8,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { 
-  Store, 
-  Loader2, 
-  Check, 
+import {
+  Loader2,
+  Check,
   ArrowLeft,
   ArrowRight,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Eye,
-  EyeOff,
-  Lock,
   Mail
 } from "lucide-react"
 import Link from "next/link"
 
-interface SubscriptionPlan {
-  id: string
-  name: string
-  name_en: string
-  price: number
-  duration_days: number
-  features: string[]
-  is_active: boolean
-  is_default: boolean
-}
-
 function CreateStoreContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const preselectedPlanId = searchParams.get("plan")
-  
-  const [step, setStep] = useState(1) // 1: بيانات المتجر, 2: اختيار الباقة
+
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
-  const [loadingPlans, setLoadingPlans] = useState(true)
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(preselectedPlanId)
-  const [tempStoreData, setTempStoreData] = useState<any>(null) // حفظ مؤقت لبيانات المتجر
-  
+
   const [subdomainAvailable, setSubdomainAvailable] = useState<boolean | null>(null)
   const [checkingSubdomain, setCheckingSubdomain] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   const [formData, setFormData] = useState({
     storeName: "",
     subdomain: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
     phone: "",
     description: "",
   })
@@ -68,47 +43,36 @@ function CreateStoreContent() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Load plans on mount
+  // Check authentication on mount
   useEffect(() => {
-    loadPlans()
-  }, [])
-
-  const loadPlans = async () => {
-    try {
-      // Use API endpoint instead of direct Supabase query (bypasses RLS)
-      const response = await fetch("/api/subscription-plans")
-      const data = await response.json()
-
-      if (!response.ok || data.error) {
-        console.error("Error loading plans:", data.error)
-        setError("فشل تحميل الباقات. يرجى التأكد من إعداد قاعدة البيانات بشكل صحيح.")
-      } else if (data.plans) {
-        setPlans(data.plans)
-        // If no plan selected, select the default one
-        if (!selectedPlanId) {
-          const defaultPlan = data.plans.find((p: SubscriptionPlan) => p.is_default)
-          if (defaultPlan) {
-            setSelectedPlanId(defaultPlan.id)
-          } else if (data.plans.length > 0) {
-            setSelectedPlanId(data.plans[0].id)
-          }
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        
+        if (error || !user) {
+          // User not authenticated, redirect to login with next parameter
+          const nextParam = encodeURIComponent("/create-store")
+          router.push(`/auth?next=${nextParam}`)
+          return
         }
-      }
-    } catch (error) {
-      console.error("Error loading plans:", error)
-      setError("حدث خطأ في تحميل الباقات")
-    } finally {
-      setLoadingPlans(false)
-    }
-  }
 
-  // دالة للتحقق من صلاحية subdomain
+        // User is authenticated
+        setUserEmail(user.email || "")
+        setCheckingAuth(false)
+      } catch (err) {
+        console.error("Auth check error:", err)
+        router.push("/auth")
+      }
+    }
+
+    checkAuth()
+  }, [router, supabase.auth])
+
   const isValidSubdomain = (subdomain: string): boolean => {
     const regex = /^[a-z0-9-]+$/
     return regex.test(subdomain) && subdomain.length >= 3 && subdomain.length <= 30
   }
 
-  // دالة للتحقق من توفر subdomain
   const checkSubdomainAvailability = useCallback(async (subdomain: string) => {
     if (!isValidSubdomain(subdomain)) {
       setSubdomainAvailable(false)
@@ -137,7 +101,6 @@ function CreateStoreContent() {
     }
   }, [supabase])
 
-  // معالجة تغيير subdomain
   const handleSubdomainChange = (value: string) => {
     const cleaned = value.toLowerCase().replace(/[^a-z0-9-]/g, "")
     setFormData({ ...formData, subdomain: cleaned })
@@ -154,24 +117,14 @@ function CreateStoreContent() {
     }
   }, [formData.subdomain, checkSubdomainAvailability])
 
-  // معالجة إرسال النموذج (الخطوة 1: التحقق من البيانات فقط)
+  // معالجة إرسال النموذج وإنشاء المتجر مباشرة
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
     // التحقق من صحة البيانات
-    if (!formData.storeName || !formData.subdomain || !formData.email || !formData.password) {
+    if (!formData.storeName || !formData.subdomain) {
       setError("يرجى ملء جميع الحقول المطلوبة")
-      return
-    }
-
-    if (formData.password.length < 6) {
-      setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
-      return
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError("كلمات المرور غير متطابقة")
       return
     }
 
@@ -185,43 +138,20 @@ function CreateStoreContent() {
       return
     }
 
-    // حفظ البيانات مؤقتاً والانتقال للخطوة 2
-    setTempStoreData(formData)
-    setStep(2)
-  }
-
-  // معالجة إنشاء المتجر والدفع (الخطوة 2: اختيار الباقة والدفع)
-  const handleCreateStore = async () => {
     setIsLoading(true)
-    setError(null)
 
     try {
-      if (!selectedPlanId) {
-        setError("يرجى اختيار باقة")
-        setIsLoading(false)
-        return
-      }
-
-      const selectedPlan = plans.find(p => p.id === selectedPlanId)
-      if (!selectedPlan) {
-        setError("الباقة المختارة غير صحيحة")
-        setIsLoading(false)
-        return
-      }
-
-      // إنشاء المتجر مع حساب المدير
+      // إنشاء المتجر - لا نرسل كلمة مرور (المستخدم مسجل دخول بالفعل)
+      // لا نرسل plan_id - سيتم اختيار الباقة في صفحة /subscription/plans
       const response = await fetch("/api/stores/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          store_name: tempStoreData.storeName,
-          subdomain: tempStoreData.subdomain,
-          slug: tempStoreData.subdomain,
-          email: tempStoreData.email,
-          password: tempStoreData.password,
-          phone: tempStoreData.phone || null,
-          description: tempStoreData.description || null,
-          plan_id: selectedPlanId,
+          store_name: formData.storeName,
+          subdomain: formData.subdomain,
+          slug: formData.subdomain,
+          phone: formData.phone || null,
+          description: formData.description || null,
         }),
       })
 
@@ -233,93 +163,17 @@ function CreateStoreContent() {
         return
       }
 
-      // إذا كان يحتاج لدفع، توجيه لصفحة الدفع
-      if (result.requires_payment) {
-        // حفظ معلومات المتجر في sessionStorage للاستخدام في صفحة الدفع
-        sessionStorage.setItem("pending_store", JSON.stringify({
-          store_id: result.store.id,
-          store_name: tempStoreData.storeName,
-          subdomain: tempStoreData.subdomain,
-          plan: result.plan,
-        }))
-        
-        // تسجيل دخول المستخدم تلقائياً
-        console.log("[Create Store] Attempting auto-login...")
-        
-        // قد يحتاج تأخير صغير حتى ينتهي Supabase من إنشاء المستخدم
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        let signInAttempts = 0
-        let signInSuccess = false
-        
-        while (signInAttempts < 3 && !signInSuccess) {
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: tempStoreData.email,
-            password: tempStoreData.password,
-          })
+      console.log("[Create Store] Store created successfully, redirecting to plans page")
 
-          if (signInError) {
-            signInAttempts++
-            console.warn(`Auto-login attempt ${signInAttempts} failed:`, signInError)
-            if (signInAttempts < 3) {
-              // انتظر ثم حاول مرة أخرى
-              await new Promise(resolve => setTimeout(resolve, 1000))
-            }
-          } else if (signInData?.user) {
-            console.log("[Create Store] Auto-login successful!")
-            signInSuccess = true
-          }
-        }
-        
-        if (!signInSuccess) {
-          console.warn("[Create Store] Auto-login failed after 3 attempts, but continuing with payment")
-        }
-        
-        // استدعاء API الدفع
-        const paymentResponse = await fetch("/api/payment/subscription/initiate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            store_id: result.store.id,
-            plan_id: selectedPlanId,
-            email: tempStoreData.email, // بيانات احتياطية
-            password: tempStoreData.password,
-          }),
-        })
+      // حفظ معلومات المتجر في sessionStorage
+      sessionStorage.setItem("pending_store", JSON.stringify({
+        store_id: result.store.id,
+        store_name: formData.storeName,
+        subdomain: formData.subdomain,
+      }))
 
-        const paymentResult = await paymentResponse.json()
-
-        if (!paymentResponse.ok) {
-          console.error("[Create Store] Payment API error:", paymentResult)
-          setError(paymentResult.error || "فشل في إنشاء طلب الدفع")
-          setIsLoading(false)
-          return
-        }
-
-        console.log("[Create Store] Payment URL received:", paymentResult.payment_url ? "✓" : "✗")
-
-        // إعادة التوجيه لصفحة الدفع
-        if (paymentResult.payment_url) {
-          console.log("[Create Store] Redirecting to Kashier...")
-          window.location.href = paymentResult.payment_url
-        } else {
-          setError("لم نتمكن من الحصول على رابط الدفع")
-          setIsLoading(false)
-        }
-        return
-      }
-
-      // المتجر مجاني - توجيه مباشر
-      const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"
-      const isLocalhost = platformDomain === "localhost" || window.location.hostname === "localhost"
-      const protocol = isLocalhost ? "http" : "https"
-      const port = isLocalhost ? ":3000" : ""
-      const storeUrl = `${protocol}://${tempStoreData.subdomain}.${platformDomain}${port}`
-      
-      alert(`تم إنشاء متجرك بنجاح!\n\nيمكنك الوصول إليه عبر:\n${storeUrl}\n\nسيتم إعادة توجيهك الآن...`)
-      
-      // توجيه للـ admin login مع صفحة المتجر - سيتم تسجيل دخول آلي بـ email و password
-      window.location.href = `${storeUrl}/admin/login`
+      // إعادة التوجيه لصفحة اختيار الخطة
+      window.location.href = `/subscription/plans?store_id=${result.store.id}`
 
     } catch (err) {
       console.error("Error creating store:", err)
@@ -328,16 +182,17 @@ function CreateStoreContent() {
     }
   }
 
-  const formatDuration = (days: number) => {
-    if (days === 14) return "14 يوم تجربة"
-    if (days === 30) return "شهري"
-    if (days === 90) return "3 أشهر"
-    if (days === 180) return "6 أشهر"
-    if (days === 365) return "سنوي"
-    return `${days} يوم`
+  // Show loading while checking authentication
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-gray-600">جاري التحقق من حسابك...</p>
+        </div>
+      </div>
+    )
   }
-
-  const selectedPlan = plans.find(p => p.id === selectedPlanId)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12 px-4" dir="rtl">
@@ -352,34 +207,12 @@ function CreateStoreContent() {
             🚀 إنشاء متجر جديد
           </h1>
           <p className="text-lg text-gray-600">
-            {step === 1 ? "أدخل بيانات متجرك" : "اختر الباقة المناسبة لك"}
+            أدخل بيانات متجرك للبدء
           </p>
         </div>
 
-        {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-10">
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-              step >= 1 ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-500"
-            }`}>
-              {step > 1 ? <Check className="w-5 h-5" /> : "1"}
-            </div>
-            <span className={step >= 1 ? "text-gray-900" : "text-gray-500"}>بيانات المتجر</span>
-          </div>
-          <div className={`w-16 h-1 mx-2 ${step > 1 ? "bg-purple-600" : "bg-gray-200"}`} />
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-              step >= 2 ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-500"
-            }`}>
-              2
-            </div>
-            <span className={step >= 2 ? "text-gray-900" : "text-gray-500"}>اختيار الباقة</span>
-          </div>
-        </div>
-
-        {/* Step 1: Store Details */}
-        {step === 1 && (
-          <Card className="shadow-xl">
+        {/* Store Details Form */}
+        <Card className="shadow-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -449,82 +282,24 @@ function CreateStoreContent() {
                   </p>
                 </div>
 
-                {/* البريد الإلكتروني */}
+                {/* البريد الإلكتروني - Read-Only */}
                 <div className="space-y-2">
                   <Label htmlFor="email">
-                    البريد الإلكتروني (للدخول للوحة التحكم) <span className="text-red-500">*</span>
+                    البريد الإلكتروني (مدير المتجر)
                   </Label>
                   <div className="relative">
                     <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
                       type="email"
                       id="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="admin@example.com"
-                      className="pr-10"
-                      required
+                      value={userEmail || ""}
+                      readOnly
+                      className="pr-10 bg-gray-100 cursor-not-allowed"
                     />
                   </div>
-                </div>
-
-                {/* كلمة المرور */}
-                <div className="space-y-2">
-                  <Label htmlFor="password">
-                    كلمة المرور <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      id="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="pr-10 pl-10"
-                      required
-                      minLength={6}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500">على الأقل 6 أحرف</p>
-                </div>
-
-                {/* تأكيد كلمة المرور */}
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">
-                    تأكيد كلمة المرور <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      id="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      placeholder="••••••••"
-                      className="pr-10"
-                      required
-                    />
-                  </div>
-                  {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                    <p className="text-xs text-red-500 flex items-center gap-1">
-                      <XCircle className="w-3 h-3" />
-                      كلمات المرور غير متطابقة
-                    </p>
-                  )}
-                  {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                    <p className="text-xs text-green-500 flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" />
-                      كلمات المرور متطابقة
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-500">
+                    هذا البريد الإلكتروني مرتبط بحسابك ولا يمكن تغييره هنا
+                  </p>
                 </div>
 
                 {/* رقم الهاتف */}
@@ -572,129 +347,25 @@ function CreateStoreContent() {
                   </Link>
                   <Button
                     type="submit"
-                    disabled={!subdomainAvailable || checkingSubdomain}
+                    disabled={!subdomainAvailable || checkingSubdomain || isLoading}
                     className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   >
-                    التالي - اختيار الباقة
-                    <ArrowLeft className="w-4 h-4" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        جاري الإنشاء...
+                      </>
+                    ) : (
+                      <>
+                        إنشاء المتجر
+                        <ArrowLeft className="w-4 h-4" />
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
-        )}
-
-        {/* Step 2: Plan Selection */}
-        {step === 2 && (
-          <div className="space-y-6">
-            {loadingPlans ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-              </div>
-            ) : error ? (
-              <Card className="text-center py-12 border-red-200 bg-red-50">
-                <CardContent>
-                  <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-red-900 mb-2">خطأ في تحميل الباقات</h3>
-                  <p className="text-red-700 mb-4">{error}</p>
-                  <div className="bg-white border border-red-200 rounded-lg p-4 mt-4 text-right">
-                    <h4 className="font-semibold text-gray-900 mb-2">الحل:</h4>
-                    <ol className="text-sm text-gray-700 space-y-1">
-                      <li>1. افتح Supabase Dashboard</li>
-                      <li>2. اذهب إلى SQL Editor</li>
-                      <li>3. شغّل السكريبت: <code className="bg-gray-100 px-2 py-1 rounded text-xs">scripts/subscription/01-subscription-schema.sql</code></li>
-                    </ol>
-                  </div>
-                  <Button onClick={loadPlans} className="mt-4">
-                    <Loader2 className="w-4 h-4 ml-2" />
-                    إعادة المحاولة
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : plans.length === 0 ? (
-              <Card className="text-center py-12">
-                <CardContent>
-                  <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                  <p className="text-gray-600">لا توجد باقات متاحة حالياً</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {plans.map((plan) => (
-                  <Card
-                    key={plan.id}
-                    className={`cursor-pointer transition-all hover:shadow-lg ${
-                      selectedPlanId === plan.id
-                        ? "border-2 border-purple-500 shadow-lg"
-                        : "border hover:border-purple-200"
-                    } ${plan.is_default ? "relative overflow-hidden" : ""}`}
-                    onClick={() => setSelectedPlanId(plan.id)}
-                  >
-                    {plan.is_default && (
-                      <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-center py-1 text-sm font-medium">
-                        الأكثر شيوعاً
-                      </div>
-                    )}
-                    <CardHeader className={plan.is_default ? "pt-10" : ""}>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl">{plan.name}</CardTitle>
-                        {selectedPlanId === plan.id && (
-                          <CheckCircle className="w-6 h-6 text-purple-600" />
-                        )}
-                      </div>
-                      <div className="flex items-baseline gap-1 mt-2">
-                        <span className="text-3xl font-bold text-gray-900">
-                          {plan.price === 0 ? "مجاني" : plan.price.toLocaleString()}
-                        </span>
-                        {plan.price > 0 && (
-                          <span className="text-gray-500">EGP / {formatDuration(plan.duration_days)}</span>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2">
-                        {plan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm">
-                            <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                            <span className="text-gray-600">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-between pt-6">
-              <Button
-                variant="outline"
-                onClick={() => setStep(1)}
-                className="gap-2"
-              >
-                <ArrowRight className="w-4 h-4" />
-                السابق
-              </Button>
-              <Button
-                onClick={handleCreateStore}
-                disabled={isLoading || !selectedPlanId}
-                className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    جاري الإنشاء...
-                  </>
-                ) : (
-                  <>
-                    {plans.find(p => p.id === selectedPlanId)?.price === 0 ? "إنشاء المتجر" : "المتابعة للدفع"}
-                    <ArrowLeft className="w-4 h-4" />
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* معلومات إضافية */}
         <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl">

@@ -164,41 +164,70 @@ export default function AdminLoginPage() {
       let userStoreId: string | null = null
 
       // Check profiles table
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role, store_id")
         .eq("id", authData.user.id)
         .maybeSingle() as { data: { role: string; store_id: string | null } | null; error: any }
 
-      if (profile && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role)) {
-        hasAccess = true
-        userStoreId = profile.store_id
+      if (profileError && profileError.code !== "PGRST116") {
+        console.error("[Login] Profile check error:", profileError)
+      }
+
+      console.log("[Login] Profile found:", { profile, hasProfile: !!profile, role: profile?.role, store_id: profile?.store_id })
+
+      // السماح بالدخول إذا:
+      // 1. لديه role admin/store_owner/owner/super_admin
+      // 2. أو لديه store_id (صاحب متجر)
+      if (profile) {
+        const isAdminRole = profile.role && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role.toLowerCase())
+        const isStoreOwner = !!profile.store_id
+
+        if (isAdminRole || isStoreOwner) {
+          hasAccess = true
+          userStoreId = profile.store_id
+          console.log("[Login] ✓ User has admin access via profile", { isAdminRole, isStoreOwner })
+        }
       }
 
       // If not in profiles, check store_admins
       if (!hasAccess) {
-        const { data: storeAdmin } = await supabase
+        const { data: storeAdmin, error: storeAdminError } = await supabase
           .from("store_admins")
           .select("role, store_id")
           .eq("user_id", authData.user.id)
           .eq("is_active", true)
           .maybeSingle() as { data: { role: string; store_id: string } | null; error: any }
 
+        if (storeAdminError && storeAdminError.code !== "PGRST116") {
+          console.error("[Login] Store admin check error:", storeAdminError)
+        }
+
+        console.log("[Login] Store admin found:", { storeAdmin, hasAccess: !!storeAdmin })
+
         if (storeAdmin) {
           hasAccess = true
           userStoreId = storeAdmin.store_id
+          console.log("[Login] ✓ User has admin access via store_admins")
         }
       }
 
       if (!hasAccess) {
+        console.warn("[Login] ✗ User has NO admin access", {
+          userId: authData.user.id,
+          profileRole: profile?.role,
+          profileStoreId: profile?.store_id,
+          storeId: storeId
+        })
         await supabase.auth.signOut()
-        throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
+        throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم. يرجى التواصل مع الدعم الفني.")
       }
 
       // CRITICAL: If on a subdomain, verify user owns THIS store
       // Check if userStoreId is set and matches current store
       if (storeId) {
         if (!userStoreId || userStoreId !== storeId) {
+          console.warn("[Login] Store mismatch:", { userStoreId, currentStoreId: storeId })
           await supabase.auth.signOut()
           throw new Error("هذا الحساب لا يملك صلاحية الوصول لهذا المتجر")
         }
