@@ -41,12 +41,13 @@ function CreateStoreContent() {
   const searchParams = useSearchParams()
   const preselectedPlanId = searchParams.get("plan")
   
-  const [step, setStep] = useState(1) // 1: اختيار الباقة, 2: بيانات المتجر
+  const [step, setStep] = useState(1) // 1: بيانات المتجر, 2: اختيار الباقة
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loadingPlans, setLoadingPlans] = useState(true)
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(preselectedPlanId)
+  const [tempStoreData, setTempStoreData] = useState<any>(null) // حفظ مؤقت لبيانات المتجر
   
   const [subdomainAvailable, setSubdomainAvailable] = useState<boolean | null>(null)
   const [checkingSubdomain, setCheckingSubdomain] = useState(false)
@@ -153,40 +154,57 @@ function CreateStoreContent() {
     }
   }, [formData.subdomain, checkSubdomainAvailability])
 
-  // معالجة إرسال النموذج
-  const handleSubmit = async (e: React.FormEvent) => {
+  // معالجة إرسال النموذج (الخطوة 1: التحقق من البيانات فقط)
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+
+    // التحقق من صحة البيانات
+    if (!formData.storeName || !formData.subdomain || !formData.email || !formData.password) {
+      setError("يرجى ملء جميع الحقول المطلوبة")
+      return
+    }
+
+    if (formData.password.length < 6) {
+      setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+      return
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("كلمات المرور غير متطابقة")
+      return
+    }
+
+    if (!isValidSubdomain(formData.subdomain)) {
+      setError("اسم النطاق غير صالح. استخدم أحرف صغيرة وأرقام وشرطات فقط")
+      return
+    }
+
+    if (subdomainAvailable === false) {
+      setError("اسم النطاق محجوز بالفعل")
+      return
+    }
+
+    // حفظ البيانات مؤقتاً والانتقال للخطوة 2
+    setTempStoreData(formData)
+    setStep(2)
+  }
+
+  // معالجة إنشاء المتجر والدفع (الخطوة 2: اختيار الباقة والدفع)
+  const handleCreateStore = async () => {
     setIsLoading(true)
     setError(null)
 
     try {
-      // التحقق من صحة البيانات
-      if (!formData.storeName || !formData.subdomain || !formData.email || !formData.password) {
-        setError("يرجى ملء جميع الحقول المطلوبة")
+      if (!selectedPlanId) {
+        setError("يرجى اختيار باقة")
         setIsLoading(false)
         return
       }
 
-      if (formData.password.length < 6) {
-        setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
-        setIsLoading(false)
-        return
-      }
-
-      if (formData.password !== formData.confirmPassword) {
-        setError("كلمات المرور غير متطابقة")
-        setIsLoading(false)
-        return
-      }
-
-      if (!isValidSubdomain(formData.subdomain)) {
-        setError("اسم النطاق غير صالح. استخدم أحرف صغيرة وأرقام وشرطات فقط")
-        setIsLoading(false)
-        return
-      }
-
-      if (subdomainAvailable === false) {
-        setError("اسم النطاق محجوز بالفعل")
+      const selectedPlan = plans.find(p => p.id === selectedPlanId)
+      if (!selectedPlan) {
+        setError("الباقة المختارة غير صحيحة")
         setIsLoading(false)
         return
       }
@@ -196,13 +214,13 @@ function CreateStoreContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          store_name: formData.storeName,
-          subdomain: formData.subdomain,
-          slug: formData.subdomain,
-          email: formData.email,
-          password: formData.password,
-          phone: formData.phone || null,
-          description: formData.description || null,
+          store_name: tempStoreData.storeName,
+          subdomain: tempStoreData.subdomain,
+          slug: tempStoreData.subdomain,
+          email: tempStoreData.email,
+          password: tempStoreData.password,
+          phone: tempStoreData.phone || null,
+          description: tempStoreData.description || null,
           plan_id: selectedPlanId,
         }),
       })
@@ -220,12 +238,36 @@ function CreateStoreContent() {
         // حفظ معلومات المتجر في sessionStorage للاستخدام في صفحة الدفع
         sessionStorage.setItem("pending_store", JSON.stringify({
           store_id: result.store.id,
-          store_name: formData.storeName,
-          subdomain: formData.subdomain,
+          store_name: tempStoreData.storeName,
+          subdomain: tempStoreData.subdomain,
           plan: result.plan,
         }))
         
-        router.push(`/checkout/subscription?store_id=${result.store.id}&plan_id=${result.plan.id}`)
+        // استدعاء API الدفع
+        const paymentResponse = await fetch("/api/payment/subscription/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            store_id: result.store.id,
+            plan_id: selectedPlanId,
+          }),
+        })
+
+        const paymentResult = await paymentResponse.json()
+
+        if (!paymentResponse.ok) {
+          setError(paymentResult.error || "فشل في إنشاء طلب الدفع")
+          setIsLoading(false)
+          return
+        }
+
+        // إعادة التوجيه لصفحة الدفع
+        if (paymentResult.payment_url) {
+          window.location.href = paymentResult.payment_url
+        } else {
+          setError("لم نتمكن من الحصول على رابط الدفع")
+          setIsLoading(false)
+        }
         return
       }
 
@@ -234,7 +276,7 @@ function CreateStoreContent() {
       const isLocalhost = platformDomain === "localhost" || window.location.hostname === "localhost"
       const protocol = isLocalhost ? "http" : "https"
       const port = isLocalhost ? ":3000" : ""
-      const storeUrl = `${protocol}://${formData.subdomain}.${platformDomain}${port}`
+      const storeUrl = `${protocol}://${tempStoreData.subdomain}.${platformDomain}${port}`
       
       alert(`تم إنشاء متجرك بنجاح!\n\nيمكنك الوصول إليه عبر:\n${storeUrl}\n\nسيتم إعادة توجيهك الآن...`)
       
@@ -272,7 +314,7 @@ function CreateStoreContent() {
             🚀 إنشاء متجر جديد
           </h1>
           <p className="text-lg text-gray-600">
-            {step === 1 ? "اختر الباقة المناسبة لك" : "أدخل بيانات متجرك"}
+            {step === 1 ? "أدخل بيانات متجرك" : "اختر الباقة المناسبة لك"}
           </p>
         </div>
 
@@ -284,7 +326,7 @@ function CreateStoreContent() {
             }`}>
               {step > 1 ? <Check className="w-5 h-5" /> : "1"}
             </div>
-            <span className={step >= 1 ? "text-gray-900" : "text-gray-500"}>اختر الباقة</span>
+            <span className={step >= 1 ? "text-gray-900" : "text-gray-500"}>بيانات المتجر</span>
           </div>
           <div className={`w-16 h-1 mx-2 ${step > 1 ? "bg-purple-600" : "bg-gray-200"}`} />
           <div className="flex items-center gap-3">
@@ -293,108 +335,12 @@ function CreateStoreContent() {
             }`}>
               2
             </div>
-            <span className={step >= 2 ? "text-gray-900" : "text-gray-500"}>بيانات المتجر</span>
+            <span className={step >= 2 ? "text-gray-900" : "text-gray-500"}>اختيار الباقة</span>
           </div>
         </div>
 
-        {/* Step 1: Plan Selection */}
+        {/* Step 1: Store Details */}
         {step === 1 && (
-          <div className="space-y-6">
-            {loadingPlans ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-              </div>
-            ) : error ? (
-              <Card className="text-center py-12 border-red-200 bg-red-50">
-                <CardContent>
-                  <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-red-900 mb-2">خطأ في تحميل الباقات</h3>
-                  <p className="text-red-700 mb-4">{error}</p>
-                  <div className="bg-white border border-red-200 rounded-lg p-4 mt-4 text-right">
-                    <h4 className="font-semibold text-gray-900 mb-2">الحل:</h4>
-                    <ol className="text-sm text-gray-700 space-y-1">
-                      <li>1. افتح Supabase Dashboard</li>
-                      <li>2. اذهب إلى SQL Editor</li>
-                      <li>3. شغّل السكريبت: <code className="bg-gray-100 px-2 py-1 rounded text-xs">scripts/subscription/01-subscription-schema.sql</code></li>
-                    </ol>
-                  </div>
-                  <Button onClick={loadPlans} className="mt-4">
-                    <Loader2 className="w-4 h-4 ml-2" />
-                    إعادة المحاولة
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : plans.length === 0 ? (
-              <Card className="text-center py-12">
-                <CardContent>
-                  <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                  <p className="text-gray-600">لا توجد باقات متاحة حالياً</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {plans.map((plan) => (
-                  <Card
-                    key={plan.id}
-                    className={`cursor-pointer transition-all hover:shadow-lg ${
-                      selectedPlanId === plan.id
-                        ? "border-2 border-purple-500 shadow-lg"
-                        : "border hover:border-purple-200"
-                    } ${plan.is_default ? "relative overflow-hidden" : ""}`}
-                    onClick={() => setSelectedPlanId(plan.id)}
-                  >
-                    {plan.is_default && (
-                      <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-center py-1 text-sm font-medium">
-                        الأكثر شيوعاً
-                      </div>
-                    )}
-                    <CardHeader className={plan.is_default ? "pt-10" : ""}>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl">{plan.name}</CardTitle>
-                        {selectedPlanId === plan.id && (
-                          <CheckCircle className="w-6 h-6 text-purple-600" />
-                        )}
-                      </div>
-                      <div className="flex items-baseline gap-1 mt-2">
-                        <span className="text-3xl font-bold text-gray-900">
-                          {plan.price === 0 ? "مجاني" : plan.price.toLocaleString()}
-                        </span>
-                        {plan.price > 0 && (
-                          <span className="text-gray-500">EGP / {formatDuration(plan.duration_days)}</span>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2">
-                        {plan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm">
-                            <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                            <span className="text-gray-600">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-center pt-6">
-              <Button
-                size="lg"
-                onClick={() => setStep(2)}
-                disabled={!selectedPlanId}
-                className="text-lg px-8 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              >
-                التالي
-                <ArrowLeft className="w-5 h-5 mr-2" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Store Details */}
-        {step === 2 && (
           <Card className="shadow-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -402,15 +348,10 @@ function CreateStoreContent() {
                   <CardTitle>بيانات المتجر</CardTitle>
                   <CardDescription>أدخل معلومات متجرك الجديد</CardDescription>
                 </div>
-                {selectedPlan && (
-                  <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100">
-                    {selectedPlan.name} - {selectedPlan.price === 0 ? "مجاني" : `${selectedPlan.price} EGP`}
-                  </Badge>
-                )}
               </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleFormSubmit} className="space-y-6">
                 {/* اسم المتجر */}
                 <div className="space-y-2">
                   <Label htmlFor="storeName">
@@ -581,41 +522,140 @@ function CreateStoreContent() {
 
                 {/* Buttons */}
                 <div className="flex items-center justify-between pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setStep(1)}
-                    className="gap-2"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                    السابق
-                  </Button>
+                  <Link href="/landing">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                      إلغاء
+                    </Button>
+                  </Link>
                   <Button
                     type="submit"
-                    disabled={isLoading || !subdomainAvailable || checkingSubdomain}
+                    disabled={!subdomainAvailable || checkingSubdomain}
                     className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        جاري الإنشاء...
-                      </>
-                    ) : selectedPlan?.price === 0 ? (
-                      <>
-                        إنشاء المتجر
-                        <ArrowLeft className="w-4 h-4" />
-                      </>
-                    ) : (
-                      <>
-                        المتابعة للدفع
-                        <ArrowLeft className="w-4 h-4" />
-                      </>
-                    )}
+                    التالي - اختيار الباقة
+                    <ArrowLeft className="w-4 h-4" />
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
+        )}
+
+        {/* Step 2: Plan Selection */}
+        {step === 2 && (
+          <div className="space-y-6">
+            {loadingPlans ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+              </div>
+            ) : error ? (
+              <Card className="text-center py-12 border-red-200 bg-red-50">
+                <CardContent>
+                  <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-red-900 mb-2">خطأ في تحميل الباقات</h3>
+                  <p className="text-red-700 mb-4">{error}</p>
+                  <div className="bg-white border border-red-200 rounded-lg p-4 mt-4 text-right">
+                    <h4 className="font-semibold text-gray-900 mb-2">الحل:</h4>
+                    <ol className="text-sm text-gray-700 space-y-1">
+                      <li>1. افتح Supabase Dashboard</li>
+                      <li>2. اذهب إلى SQL Editor</li>
+                      <li>3. شغّل السكريبت: <code className="bg-gray-100 px-2 py-1 rounded text-xs">scripts/subscription/01-subscription-schema.sql</code></li>
+                    </ol>
+                  </div>
+                  <Button onClick={loadPlans} className="mt-4">
+                    <Loader2 className="w-4 h-4 ml-2" />
+                    إعادة المحاولة
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : plans.length === 0 ? (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                  <p className="text-gray-600">لا توجد باقات متاحة حالياً</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {plans.map((plan) => (
+                  <Card
+                    key={plan.id}
+                    className={`cursor-pointer transition-all hover:shadow-lg ${
+                      selectedPlanId === plan.id
+                        ? "border-2 border-purple-500 shadow-lg"
+                        : "border hover:border-purple-200"
+                    } ${plan.is_default ? "relative overflow-hidden" : ""}`}
+                    onClick={() => setSelectedPlanId(plan.id)}
+                  >
+                    {plan.is_default && (
+                      <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-center py-1 text-sm font-medium">
+                        الأكثر شيوعاً
+                      </div>
+                    )}
+                    <CardHeader className={plan.is_default ? "pt-10" : ""}>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-xl">{plan.name}</CardTitle>
+                        {selectedPlanId === plan.id && (
+                          <CheckCircle className="w-6 h-6 text-purple-600" />
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-3xl font-bold text-gray-900">
+                          {plan.price === 0 ? "مجاني" : plan.price.toLocaleString()}
+                        </span>
+                        {plan.price > 0 && (
+                          <span className="text-gray-500">EGP / {formatDuration(plan.duration_days)}</span>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {plan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                            <span className="text-gray-600">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-between pt-6">
+              <Button
+                variant="outline"
+                onClick={() => setStep(1)}
+                className="gap-2"
+              >
+                <ArrowRight className="w-4 h-4" />
+                السابق
+              </Button>
+              <Button
+                onClick={handleCreateStore}
+                disabled={isLoading || !selectedPlanId}
+                className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    جاري الإنشاء...
+                  </>
+                ) : (
+                  <>
+                    {plans.find(p => p.id === selectedPlanId)?.price === 0 ? "إنشاء المتجر" : "المتابعة للدفع"}
+                    <ArrowLeft className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* معلومات إضافية */}

@@ -58,9 +58,9 @@ export async function POST(request: NextRequest) {
     // So we can't have same email in different stores with current setup
     // We need to check if this email exists at all
     const { data: { users }, error: checkError } = await supabase.auth.admin.listUsers()
-    
+
     const existingUser = users?.find(u => u.email === email)
-    
+
     if (existingUser) {
       // Check if this user already has a profile in ANY store
       const { data: existingProfile } = await supabase
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           )
         } else {
           return NextResponse.json(
-            { 
+            {
               error: "This email is already registered in another store",
               message: "Please use a different email address or login to your existing store"
             },
@@ -88,6 +88,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Create auth user
+    // Construct tenant-aware redirect URL for email confirmation
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
+    const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'localhost:3000'
+    const redirectUrl = process.env.NODE_ENV === 'production'
+      ? `https://${store_subdomain}.${platformDomain}/auth/callback`
+      : `http://${store_subdomain}.localhost:3000/auth/callback`
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -95,6 +102,7 @@ export async function POST(request: NextRequest) {
         data: {
           name,
         },
+        emailRedirectTo: redirectUrl,
       },
     })
 
@@ -141,10 +149,10 @@ export async function POST(request: NextRequest) {
 
     if (profileError) {
       console.error("Profile creation error:", profileError)
-      
+
       // Rollback: delete the auth user if profile creation failed
       await supabase.auth.admin.deleteUser(authData.user.id)
-      
+
       return NextResponse.json(
         { error: "Failed to create user profile" },
         { status: 500 }
