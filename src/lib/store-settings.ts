@@ -9,14 +9,18 @@ export interface StoreSettings {
   updated_by?: string
 }
 
-export async function getStoreSettingsServer(): Promise<StoreSettings | null> {
+export async function getStoreSettingsServer(passedStoreId?: string): Promise<StoreSettings | null> {
   const supabase = createAdminClient()
-  
+
   let storeId: string
-  try {
-    storeId = await getStoreIdFromRequest()
-  } catch {
-    storeId = DEFAULT_STORE_ID
+  if (passedStoreId) {
+    storeId = passedStoreId
+  } else {
+    try {
+      storeId = await getStoreIdFromRequest()
+    } catch {
+      storeId = DEFAULT_STORE_ID
+    }
   }
 
   const { data, error } = await (supabase

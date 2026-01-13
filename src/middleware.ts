@@ -2,13 +2,15 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 
-// Compiled regex for better performance (created once, reused)
+// =============================================================================
+// CONSTANTS & CONFIGURATION
+// =============================================================================
+
 const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|webp|avif|mp4|webm)$/
 
-// Public paths that don't need authentication (fast lookup with Set)
 const PUBLIC_PATHS = new Set([
   "/admin/login",
-  "/admin/signup",
+  "/admin/signup", 
   "/create-store",
   "/landing",
   "/checkout/subscription",
@@ -17,243 +19,80 @@ const PUBLIC_PATHS = new Set([
   "/store-pending-payment",
   "/store-trial-expired",
   "/store-subscription-expired",
-  "/super-admin/login", // Super Admin Login page
+  "/super-admin/login",
 ])
 
-// Super admin only paths
-const SUPER_ADMIN_PATHS = new Set([
-  "/super-admin",
-])
+const SUPER_ADMIN_PATHS = new Set(["/super-admin"])
 
-// Public API paths for GET requests
-const PUBLIC_GET_API_PATHS = new Set([
+const PUBLIC_API_PATHS = new Set([
   "/api/admin/design/settings",
   "/api/admin/design/logo",
+  "/api/admin/users/create-admin",
+  "/api/admin/cache",
+  "/api/subscription-plans",
+  "/api/stores/create",
+  "/api/super-admin/auth/login",
 ])
 
-// Public API paths for POST requests (special endpoints)
-const PUBLIC_POST_API_PATHS = new Set([
-  "/api/admin/users/create-admin",  // Admin signup with secret code
-  "/api/admin/cache",               // Cache invalidation
-])
-
-// Platform domain (التغيير حسب الدومين الفعلي)
 const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
 const ENABLE_MULTI_TENANT = process.env.NEXT_PUBLIC_ENABLE_MULTI_TENANT === "true"
+const ALLOWED_ROLES = ["admin", "store_owner", "owner", "super_admin"]
+
+// =============================================================================
+// MAIN MIDDLEWARE
+// =============================================================================
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = request.headers.get("host") || ""
 
-  // Fast path: Skip static files and public routes early (most common case)
-  // This check is optimized to return immediately for most requests
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/public") ||
-    pathname.startsWith("/images") ||
-    pathname.startsWith("/fonts") ||
-    STATIC_FILE_REGEX.test(pathname)
-  ) {
+  // 1. Fast skip for static files
+  if (shouldSkipMiddleware(pathname)) {
     return NextResponse.next()
   }
 
-  // =============================================================================
-  // SUBDOMAIN ROUTING - Multi-Tenant Support
-  // =============================================================================
-  
+  // 2. Handle subdomain routing for multi-tenant
   if (ENABLE_MULTI_TENANT) {
-    // استخراج subdomain من hostname
-    // مثال: store1.makastore.com -> store1
-    const subdomain = extractSubdomain(hostname, PLATFORM_DOMAIN)
+    const subdomain = extractSubdomain(hostname)
     
-    if (subdomain && subdomain !== "www" && subdomain !== "admin") {
-      // هذا طلب لمتجر فرعي (subdomain)
-      // IMPORTANT: Allow API routes to pass through without subdomain handling
-      // API routes handle their own subdomain logic internally
-      if (!pathname.startsWith("/api/")) {
-        return handleStoreSubdomain(request, subdomain)
+    if (subdomain) {
+      // API routes from subdomains - need to lookup store and add x-store-id header
+      if (pathname.startsWith("/api/")) {
+        return handleStoreSubdomainApi(request, subdomain)
       }
-      // For API routes from subdomains, add subdomain header and continue
-      const response = NextResponse.next()
-      response.headers.set("x-subdomain", subdomain)
-      return response
+      // Store pages - handle subdomain
+      return handleStoreSubdomain(request, subdomain)
     }
     
-    // Main domain (no subdomain) - redirect to landing page
-    // Only redirect root path "/" to landing page
+    // Main domain root -> landing page
     if (pathname === "/" || pathname === "") {
-      const url = request.nextUrl.clone()
-      url.pathname = "/landing"
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(new URL("/landing", request.url))
     }
   }
-  
-  // =============================================================================
-  // ADMIN & PLATFORM ROUTES
-  // =============================================================================
 
-  // Fast path: Allow public auth pages (no DB query needed)
-  if (PUBLIC_PATHS.has(pathname)) {
+  // 3. Public paths - no auth needed
+  if (PUBLIC_PATHS.has(pathname) || PUBLIC_API_PATHS.has(pathname)) {
     return NextResponse.next()
   }
 
-  // Check Super Admin paths first (highest security)
-  if (SUPER_ADMIN_PATHS.has(pathname)) {
-    return handleSuperAdminPath(request, pathname)
+  // 4. Super Admin paths (pages)
+  if (pathname.startsWith("/super-admin") && !pathname.startsWith("/super-admin/login")) {
+    return handleSuperAdminAuth(request)
   }
 
-  // Fast path: Allow public GET API endpoints
-  if (PUBLIC_GET_API_PATHS.has(pathname) && request.method === "GET") {
-    return NextResponse.next()
+  // 5. Super Admin API routes - require super admin session
+  if (pathname.startsWith("/api/super-admin") && !pathname.includes("/auth/")) {
+    return handleSuperAdminApiAuth(request)
   }
 
-  // Fast path: Allow public POST API endpoints (with their own auth like secret codes)
-  if (PUBLIC_POST_API_PATHS.has(pathname) && request.method === "POST") {
-    return NextResponse.next()
-  }
-
-  // Only create Supabase client when actually needed (admin routes)
-  if (!pathname.startsWith("/admin") && !pathname.startsWith("/api/admin")) {
-    return NextResponse.next()
-  }
-
-  // حماية صفحات الـ admin
+  // 6. Admin routes - require authentication
   if (pathname.startsWith("/admin")) {
-    let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
-
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              request.cookies.set(name, value)
-            )
-            response = NextResponse.next({
-              request,
-            })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // التحقق من المستخدم
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      // إعادة توجيه لصفحة تسجيل الدخول
-      const url = request.nextUrl.clone()
-      url.pathname = "/admin/login"
-      return NextResponse.redirect(url)
-    }
-
-    // التحقق من صلاحيات الـ admin أو store_owner
-    // أولاً نحاول من profiles
-    let { data: profile } = await supabase
-      .from("profiles")
-      .select("role, store_id")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    // إذا مفيش profile، نجرب store_admins
-    if (!profile) {
-      const { data: storeAdmin } = await supabase
-        .from("store_admins")
-        .select("role, store_id")
-        .eq("user_id", user.id)
-        .eq("is_active", true)
-        .maybeSingle()
-
-      if (storeAdmin) {
-        profile = {
-          role: storeAdmin.role === "owner" ? "store_owner" : storeAdmin.role,
-          store_id: storeAdmin.store_id
-        }
-      }
-    }
-
-    // السماح لـ admin و store_owner و owner فقط
-    const allowedRoles = ["admin", "store_owner", "owner", "super_admin"]
-    if (!profile || !allowedRoles.includes(profile.role)) {
-      // ليس admin أو store_owner - إعادة توجيه لصفحة تسجيل الدخول
-      const url = request.nextUrl.clone()
-      url.pathname = "/admin/login"
-      return NextResponse.redirect(url)
-    }
-
-    // إضافة معلومات الدور والمتجر للـ headers
-    response.headers.set("x-user-role", profile.role)
-    if (profile.store_id) {
-      response.headers.set("x-user-store-id", profile.store_id)
-    }
-
-    return response
+    return handleAdminAuth(request)
   }
 
-  // حماية API الخاصة بالـ admin — تمنع الوصول للعامة وتعيد 401/403
+  // 7. Admin API routes - require authentication
   if (pathname.startsWith("/api/admin")) {
-    try {
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            getAll() {
-              return request.cookies.getAll()
-            },
-            setAll() {
-              // noop for middleware
-            },
-          },
-        }
-      )
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, store_id")
-        .eq("id", user.id)
-        .single()
-
-      // السماح لـ admin و store_owner فقط
-      const allowedRoles = ["admin", "store_owner"]
-      if (!profile || !allowedRoles.includes(profile.role)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
-
-      // إضافة معلومات الدور والمتجر للـ headers للـ APIs
-      const response = NextResponse.next()
-      response.headers.set("x-user-role", profile.role)
-      if (profile.store_id) {
-        response.headers.set("x-user-store-id", profile.store_id)
-      }
-      return response
-
-      return NextResponse.next()
-    } catch (e) {
-      console.error("[middleware] api/admin auth error:", e)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    return handleAdminApiAuth(request)
   }
 
   return NextResponse.next()
@@ -263,100 +102,49 @@ export async function middleware(request: NextRequest) {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/**
- * استخراج subdomain من hostname
- * @param hostname - مثال: store1.makastore.com أو store1.localhost:3000
- * @param platformDomain - مثال: makastore.com أو localhost
- * @returns subdomain أو null
- */
-function extractSubdomain(hostname: string, platformDomain: string): string | null {
-  // إزالة port إن وجد
+function shouldSkipMiddleware(pathname: string): boolean {
+  return (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api/public") ||
+    pathname.startsWith("/images") ||
+    pathname.startsWith("/fonts") ||
+    STATIC_FILE_REGEX.test(pathname)
+  )
+}
+
+function extractSubdomain(hostname: string): string | null {
   const hostWithoutPort = hostname.split(":")[0]
   
-  // التعامل مع localhost بشكل خاص (للتطوير المحلي)
-  // يعمل حتى لو كان platformDomain مضبوط على دومين آخر
+  // localhost subdomain (e.g., store1.localhost)
   if (hostWithoutPort.endsWith(".localhost")) {
-    // مثال: store1.localhost -> store1
     const subdomain = hostWithoutPort.replace(".localhost", "")
-    if (subdomain && subdomain !== "www") {
-      return subdomain
-    }
-    return null
+    return subdomain && subdomain !== "www" ? subdomain : null
   }
   
-  // في حالة localhost بدون subdomain
+  // Skip plain localhost
   if (hostWithoutPort === "localhost" || hostWithoutPort === "127.0.0.1") {
     return null
   }
   
-  // إزالة www. إن وجد
+  // Production domain subdomain
   const cleanHost = hostWithoutPort.replace(/^www\./, "")
-  
-  // التحقق من أن hostname ينتهي بالـ platform domain
-  if (!cleanHost.endsWith(platformDomain)) {
+  if (!cleanHost.endsWith(PLATFORM_DOMAIN)) {
     return null
   }
   
-  // استخراج subdomain
-  const subdomain = cleanHost.replace(`.${platformDomain}`, "")
-  
-  // إذا كان subdomain فارغ أو يساوي platform domain، يعني نحن على الدومين الرئيسي
-  if (!subdomain || subdomain === platformDomain) {
-    return null
-  }
-  
-  return subdomain
+  const subdomain = cleanHost.replace(`.${PLATFORM_DOMAIN}`, "")
+  return subdomain && subdomain !== PLATFORM_DOMAIN ? subdomain : null
 }
 
-/**
- * Handle Super Admin protected paths
- * يستخدم cookie-based session للأمان العالي
- */
-async function handleSuperAdminPath(
-  request: NextRequest,
-  pathname: string
-): Promise<NextResponse> {
-  try {
-    // التحقق من وجود session cookie
-    const sessionToken = request.cookies.get("super_admin_session")?.value
+// =============================================================================
+// SUPABASE CLIENT FACTORY
+// =============================================================================
 
-    if (!sessionToken) {
-      // لا يوجد session - إعادة توجيه لصفحة تسجيل الدخول
-      const url = request.nextUrl.clone()
-      url.pathname = "/super-admin/login"
-      return NextResponse.redirect(url)
-    }
+function createSupabaseMiddlewareClient(request: NextRequest) {
+  let response = NextResponse.next({
+    request: { headers: request.headers },
+  })
 
-    // التحقق من صحة الـ session (يمكن إضافة تحقق من الـ database)
-    // للسرعة، نعتمد على وجود الـ cookie فقط هنا
-    // يمكن إضافة تحقق إضافي من قاعدة البيانات إذا لزم الأمر
-
-    let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
-
-    // إضافة معلومات الأمان للـ headers
-    response.headers.set("x-user-role", "super_admin")
-    response.headers.set("x-is-super-admin", "true")
-
-    return response
-  } catch (error) {
-    console.error("[middleware] Super Admin auth error:", error)
-    const url = request.nextUrl.clone()
-    url.pathname = "/super-admin/login"
-    return NextResponse.redirect(url)
-  }
-}
-
-/**
- * معالجة طلبات المتاجر الفرعية (subdomains)
- */
-async function handleStoreSubdomain(request: NextRequest, subdomain: string) {
-  const { pathname, search } = request.nextUrl
-  
-  // إنشاء Supabase client للتحقق من المتجر
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -365,123 +153,313 @@ async function handleStoreSubdomain(request: NextRequest, subdomain: string) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll() {
-          // noop for middleware
+        setAll(cookiesToSet) {
+          // Update request cookies
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value)
+          })
+          // Create new response with updated cookies
+          response = NextResponse.next({
+            request: { headers: request.headers },
+          })
+          // Set cookies on response
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, {
+              ...options,
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              path: "/",
+            })
+          })
         },
       },
     }
   )
-  
+
+  return { supabase, response }
+}
+
+// =============================================================================
+// AUTH HANDLERS
+// =============================================================================
+
+async function handleAdminAuth(request: NextRequest): Promise<NextResponse> {
+  const { supabase, response } = createSupabaseMiddlewareClient(request)
+
   try {
-    // البحث عن المتجر في قاعدة البيانات
+    // Get current user - this also refreshes the session
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return redirectToLogin(request, "/admin/login")
+    }
+
+    // Get user profile/role
+    const profile = await getUserProfile(supabase, user.id)
+    
+    if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+      return redirectToLogin(request, "/admin/login")
+    }
+
+    // Add user info to headers
+    response.headers.set("x-user-role", profile.role)
+    if (profile.store_id) {
+      response.headers.set("x-user-store-id", profile.store_id)
+    }
+
+    return response
+  } catch (error) {
+    console.error("[middleware] Admin auth error:", error)
+    return redirectToLogin(request, "/admin/login")
+  }
+}
+
+async function handleAdminApiAuth(request: NextRequest): Promise<NextResponse> {
+  const { supabase } = createSupabaseMiddlewareClient(request)
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const profile = await getUserProfile(supabase, user.id)
+
+    if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const response = NextResponse.next()
+    response.headers.set("x-user-role", profile.role)
+    if (profile.store_id) {
+      response.headers.set("x-user-store-id", profile.store_id)
+    }
+    
+    return response
+  } catch (error) {
+    console.error("[middleware] Admin API auth error:", error)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+}
+
+async function handleSuperAdminAuth(request: NextRequest): Promise<NextResponse> {
+  const sessionToken = request.cookies.get("super_admin_session")?.value
+
+  if (!sessionToken) {
+    return redirectToLogin(request, "/super-admin/login")
+  }
+
+  const response = NextResponse.next({
+    request: { headers: request.headers },
+  })
+  response.headers.set("x-user-role", "super_admin")
+  response.headers.set("x-is-super-admin", "true")
+
+  return response
+}
+
+async function handleSuperAdminApiAuth(request: NextRequest): Promise<NextResponse> {
+  const sessionToken = request.cookies.get("super_admin_session")?.value
+
+  if (!sessionToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const response = NextResponse.next()
+  response.headers.set("x-user-role", "super_admin")
+  response.headers.set("x-is-super-admin", "true")
+
+  return response
+}
+
+// =============================================================================
+// PROFILE HELPER
+// =============================================================================
+
+async function getUserProfile(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+): Promise<{ role: string; store_id: string | null } | null> {
+  // Try profiles table first
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, store_id")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (profile) {
+    return profile
+  }
+
+  // Fallback to store_admins table
+  const { data: storeAdmin } = await supabase
+    .from("store_admins")
+    .select("role, store_id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (storeAdmin) {
+    return {
+      role: storeAdmin.role === "owner" ? "store_owner" : storeAdmin.role,
+      store_id: storeAdmin.store_id,
+    }
+  }
+
+  return null
+}
+
+// =============================================================================
+// REDIRECT HELPER
+// =============================================================================
+
+function redirectToLogin(request: NextRequest, loginPath: string): NextResponse {
+  const url = request.nextUrl.clone()
+  url.pathname = loginPath
+  return NextResponse.redirect(url)
+}
+
+// =============================================================================
+// STORE SUBDOMAIN API HANDLER (for API routes from subdomains)
+// =============================================================================
+
+async function handleStoreSubdomainApi(
+  request: NextRequest,
+  subdomain: string
+): Promise<NextResponse> {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: () => {},
+      },
+    }
+  )
+
+  try {
+    const { data: store, error } = await supabase
+      .from("stores")
+      .select("id, subdomain, slug")
+      .eq("subdomain", subdomain)
+      .single()
+
+    if (error || !store) {
+      // Store not found - pass through without store context
+      return NextResponse.next()
+    }
+
+    // Add store headers to the REQUEST so API handlers can read them
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-store-id", store.id)
+    requestHeaders.set("x-store-subdomain", store.subdomain)
+    requestHeaders.set("x-store-slug", store.slug)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  } catch (error) {
+    console.error(`[middleware] Store subdomain API error:`, error)
+    return NextResponse.next()
+  }
+}
+
+// =============================================================================
+// STORE SUBDOMAIN HANDLER
+// =============================================================================
+
+async function handleStoreSubdomain(
+  request: NextRequest,
+  subdomain: string
+): Promise<NextResponse> {
+  const { pathname } = request.nextUrl
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: () => {},
+      },
+    }
+  )
+
+  try {
     const { data: store, error } = await supabase
       .from("stores")
       .select("id, store_name, status, subdomain, slug, primary_color, secondary_color, logo_url, subscription_status, trial_ends_at")
       .eq("subdomain", subdomain)
       .single()
-    
-    // إذا لم يوجد المتجر أو حدث خطأ
+
     if (error || !store) {
-      console.error(`[middleware] Store not found for subdomain: ${subdomain}`, error)
-      
-      // إعادة توجيه لصفحة 404 مخصصة للمتاجر غير الموجودة
-      const url = request.nextUrl.clone()
-      url.pathname = "/store-not-found"
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(new URL("/store-not-found", request.url))
     }
-    
-    // التحقق من حالة الاشتراك أولاً
+
+    // Check subscription status
     const subscriptionStatus = store.subscription_status || "active"
-    
+
     if (subscriptionStatus === "pending_payment") {
-      console.warn(`[middleware] Store ${subdomain} is pending payment`)
-      
-      const url = request.nextUrl.clone()
-      url.pathname = "/store-pending-payment"
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(new URL("/store-pending-payment", request.url))
     }
-    
-    // التحقق من انتهاء الفترة التجريبية
+
     if (subscriptionStatus === "trial" && store.trial_ends_at) {
-      const trialEnd = new Date(store.trial_ends_at)
-      if (trialEnd < new Date()) {
-        console.warn(`[middleware] Store ${subdomain} trial has expired`)
-        
-        const url = request.nextUrl.clone()
-        url.pathname = "/store-trial-expired"
-        return NextResponse.rewrite(url)
+      if (new Date(store.trial_ends_at) < new Date()) {
+        return NextResponse.rewrite(new URL("/store-trial-expired", request.url))
       }
     }
-    
+
     if (subscriptionStatus === "expired") {
-      console.warn(`[middleware] Store ${subdomain} subscription has expired`)
-      
-      const url = request.nextUrl.clone()
-      url.pathname = "/store-subscription-expired"
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(new URL("/store-subscription-expired", request.url))
     }
-    
-    // التحقق من حالة المتجر
+
+    // Check store status
     if (store.status !== "active") {
-      console.warn(`[middleware] Store ${subdomain} is not active. Status: ${store.status}`)
-      
-      const url = request.nextUrl.clone()
-      if (store.status === "suspended") {
-        url.pathname = "/store-suspended"
-      } else if (store.status === "cancelled") {
-        url.pathname = "/store-cancelled"
-      } else {
-        url.pathname = "/store-pending"
+      const statusPages: Record<string, string> = {
+        suspended: "/store-suspended",
+        cancelled: "/store-cancelled",
       }
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(
+        new URL(statusPages[store.status] || "/store-pending", request.url)
+      )
     }
-    
-    // إعادة توجيه /auth إلى /store-auth للمتاجر الفرعية
+
+    // Redirect /auth to /store-auth
     if (pathname === "/auth" || pathname === "/auth/") {
-      const url = request.nextUrl.clone()
-      url.pathname = "/store-auth"
-      return NextResponse.rewrite(url)
+      return NextResponse.rewrite(new URL("/store-auth", request.url))
     }
-    
-    // المتجر موجود ونشط - إضافة معلومات المتجر للـ headers
-    const response = NextResponse.next()
-    response.headers.set("x-store-id", store.id)
-    response.headers.set("x-store-subdomain", store.subdomain)
-    response.headers.set("x-store-slug", store.slug)
-    response.headers.set("x-store-name", encodeURIComponent(store.store_name))
-    
-    // إضافة ألوان المتجر للتخصيص
-    if (store.primary_color) {
-      response.headers.set("x-store-primary-color", store.primary_color)
-    }
-    if (store.secondary_color) {
-      response.headers.set("x-store-secondary-color", store.secondary_color)
-    }
-    if (store.logo_url) {
-      response.headers.set("x-store-logo-url", store.logo_url)
-    }
-    
-    console.log(`[middleware] Store found: ${store.store_name} (${subdomain}) - ID: ${store.id}`)
-    
-    return response
-    
+
+    // Store is active - add headers to the REQUEST so downstream handlers can read them
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-store-id", store.id)
+    requestHeaders.set("x-store-subdomain", store.subdomain)
+    requestHeaders.set("x-store-slug", store.slug)
+    requestHeaders.set("x-store-name", encodeURIComponent(store.store_name))
+
+    if (store.primary_color) requestHeaders.set("x-store-primary-color", store.primary_color)
+    if (store.secondary_color) requestHeaders.set("x-store-secondary-color", store.secondary_color)
+    if (store.logo_url) requestHeaders.set("x-store-logo-url", store.logo_url)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
   } catch (error) {
-    console.error(`[middleware] Error fetching store for subdomain ${subdomain}:`, error)
-    
-    // في حالة الخطأ، نسمح بالمتابعة لكن بدون معلومات المتجر
+    console.error(`[middleware] Store subdomain error:`, error)
     return NextResponse.next()
   }
 }
 
+// =============================================================================
+// MATCHER CONFIG
+// =============================================================================
+
 export const config = {
-  matcher: [
-    /*
-     * Optimized matcher - only match routes that need middleware processing:
-     * - /admin/* (admin pages that need auth)
-     * - /api/admin/* (admin API routes that need auth)
-     * - All other routes for subdomain detection
-     * Excludes all static files and public routes for better performance
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 }

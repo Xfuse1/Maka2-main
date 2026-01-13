@@ -12,17 +12,15 @@ function getCurrentStoreSubdomain(): string | null {
   const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
   
   // Handle localhost with subdomain (e.g., store1.localhost)
-  if (platformDomain === "localhost" || hostname.endsWith(".localhost")) {
-    if (hostname.endsWith(".localhost")) {
-      const subdomain = hostname.replace(".localhost", "")
-      if (subdomain && subdomain !== "www") {
-        return subdomain
-      }
+  if (hostname.endsWith(".localhost")) {
+    const subdomain = hostname.replace(".localhost", "")
+    if (subdomain && subdomain !== "www") {
+      return subdomain
     }
     return null
   }
   
-  // Handle production domain
+  // Handle localhost without subdomain
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return null
   }
@@ -59,7 +57,10 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> {
     browserClient = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         flowType: "pkce",
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
+        persistSession: true,
+        autoRefreshToken: true,
+        storageKey: "supabase-auth",
       },
       global: {
         headers: storeSubdomain ? {

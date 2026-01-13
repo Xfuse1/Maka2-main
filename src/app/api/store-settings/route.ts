@@ -15,8 +15,8 @@ export async function GET() {
       storeId = DEFAULT_STORE_ID
     }
 
-    // Use cached version
-    const settings = await getCachedStoreSettings(storeId, getStoreSettingsServer)
+    // Use cached version - pass storeId to the fetcher
+    const settings = await getCachedStoreSettings(storeId, () => getStoreSettingsServer(storeId))
     
     return NextResponse.json({ 
       settings,

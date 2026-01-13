@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createBrowserClient } from "@supabase/ssr"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -97,11 +96,6 @@ export default function SuperAdminDashboard() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [activeTab, setActiveTab] = useState("stores")
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   // Check if user is super admin
   useEffect(() => {
     checkSuperAdminAccess()
@@ -109,31 +103,32 @@ export default function SuperAdminDashboard() {
 
   const checkSuperAdminAccess = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      // Super Admin uses cookie-based authentication
+      // The middleware already verified the session cookie
+      // Just verify we can access the API (which requires the cookie)
+      const response = await fetch("/api/super-admin/stores", {
+        method: "GET",
+        credentials: "include", // Important: include cookies
+      })
 
-      if (!user) {
-        router.push("/auth?redirect=/super-admin")
+      if (!response.ok) {
+        // Not authorized or session expired
+        window.location.href = "/super-admin/login"
         return
       }
 
-      // Check if user has super_admin role
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (error || !profile || profile.role !== "super_admin") {
-        // Not authorized
-        router.push("/")
-        return
-      }
-
+      // Session is valid
       setIsSuperAdmin(true)
-      loadDashboardData()
+      
+      // Load the data from the response we already have
+      const { stores: storesWithStats, stats: totalStats } = await response.json()
+      setStores(storesWithStats)
+      setFilteredStores(storesWithStats)
+      setStats(totalStats)
+      setIsLoading(false)
     } catch (error) {
       console.error("Error checking access:", error)
-      router.push("/")
+      window.location.href = "/super-admin/login"
     }
   }
 
@@ -141,7 +136,9 @@ export default function SuperAdminDashboard() {
     setIsLoading(true)
     try {
       // Use API route instead of direct Supabase queries
-      const response = await fetch("/api/super-admin/stores")
+      const response = await fetch("/api/super-admin/stores", {
+        credentials: "include",
+      })
       
       if (!response.ok) {
         const error = await response.json()

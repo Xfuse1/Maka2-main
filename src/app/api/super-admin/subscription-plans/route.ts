@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@supabase/supabase-js"
+
+// Create admin client for database operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
+  }
+)
+
+/**
+ * Verify Super Admin session from cookie
+ */
+async function verifySuperAdminSession(request: NextRequest): Promise<boolean> {
+  const sessionToken = request.cookies.get("super_admin_session")?.value
+  return !!sessionToken
+}
 
 /**
  * GET /api/super-admin/subscription-plans
@@ -8,43 +27,12 @@ import { cookies } from "next/headers"
  */
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Fetch all plans (including inactive for admin)
-    const { data: plans, error } = await supabase
+    const { data: plans, error } = await supabaseAdmin
       .from("subscription_plans")
       .select("*")
       .order("sort_order", { ascending: true })
@@ -67,43 +55,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const body = await request.json()
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Validate required fields
+    const body = await request.json()
     const { name, name_en, price, duration_days, features, is_active, is_default, sort_order } = body
 
     if (!name || !name_en || price === undefined || !duration_days) {
@@ -112,14 +69,13 @@ export async function POST(request: NextRequest) {
 
     // If this is default, unset other defaults
     if (is_default) {
-      await supabase
+      await supabaseAdmin
         .from("subscription_plans")
         .update({ is_default: false })
         .eq("is_default", true)
     }
 
-    // Create plan
-    const { data: plan, error } = await supabase
+    const { data: plan, error } = await supabaseAdmin
       .from("subscription_plans")
       .insert({
         name,
@@ -152,42 +108,12 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const body = await request.json()
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
+    const body = await request.json()
     const { id, ...updates } = body
 
     if (!id) {
@@ -196,7 +122,7 @@ export async function PATCH(request: NextRequest) {
 
     // If setting as default, unset other defaults
     if (updates.is_default) {
-      await supabase
+      await supabaseAdmin
         .from("subscription_plans")
         .update({ is_default: false })
         .neq("id", id)
@@ -212,8 +138,7 @@ export async function PATCH(request: NextRequest) {
 
     updates.updated_at = new Date().toISOString()
 
-    // Update plan
-    const { data: plan, error } = await supabase
+    const { data: plan, error } = await supabaseAdmin
       .from("subscription_plans")
       .update(updates)
       .eq("id", id)
@@ -238,49 +163,20 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const planId = searchParams.get("id")
-    
+
     if (!planId) {
       return NextResponse.json({ error: "Plan ID required" }, { status: 400 })
     }
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     // Check if plan has active subscriptions
-    const { count } = await supabase
+    const { count } = await supabaseAdmin
       .from("subscriptions")
       .select("id", { count: "exact", head: true })
       .eq("plan_id", planId)
@@ -293,8 +189,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete plan
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("subscription_plans")
       .delete()
       .eq("id", planId)

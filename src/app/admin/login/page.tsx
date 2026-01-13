@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,15 +9,39 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, ArrowRight } from "lucide-react"
+import { Loader2, ArrowRight, Eye, EyeOff } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
   const router = useRouter()
   const { toast } = useToast()
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user) {
+          // User is already logged in, redirect to admin
+          router.replace("/admin")
+          return
+        }
+      } catch (error) {
+        console.error("Session check error:", error)
+      } finally {
+        setCheckingSession(false)
+      }
+    }
+    
+    checkSession()
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,89 +50,82 @@ export default function AdminLoginPage() {
     try {
       const supabase = getSupabaseBrowserClient()
       
-      console.log("🔐 [LOGIN] Starting authentication...")
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      // Sign in with email and password
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+        email: email.trim().toLowerCase(), 
+        password 
+      })
 
       if (authError) {
-        console.error("❌ [LOGIN] Auth error:", authError)
-        throw authError
+        throw new Error(authError.message === "Invalid login credentials" 
+          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" 
+          : authError.message)
       }
+
       if (!authData.user) {
-        console.error("❌ [LOGIN] No user data returned")
         throw new Error("فشل تسجيل الدخول")
       }
 
-      console.log("✅ [LOGIN] Auth successful, user ID:", authData.user.id)
-      console.log("🔍 [LOGIN] Fetching profile/store_admin for user:", authData.user.id)
+      // Verify user has admin role (profiles or store_admins)
+      let hasAccess = false
 
-      // أولاً: نحاول جلب الـ profile
-      let { data: profile, error: profileError } = await supabase
+      // Check profiles table
+      const { data: profile } = await supabase
         .from("profiles")
         .select("role, store_id")
         .eq("id", authData.user.id)
-        .maybeSingle() as { data: { role: string, store_id: string | null } | null, error: any }
+        .maybeSingle()
 
-      console.log("📊 [LOGIN] Profile query result:", { profile, profileError })
+      if (profile && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role)) {
+        hasAccess = true
+      }
 
-      // إذا مفيش profile، نحاول نجيب من store_admins
-      if (!profile) {
-        console.log("🔍 [LOGIN] No profile found, checking store_admins...")
-        const { data: storeAdmin, error: storeAdminError } = await supabase
+      // If not in profiles, check store_admins
+      if (!hasAccess) {
+        const { data: storeAdmin } = await supabase
           .from("store_admins")
-          .select("role, store_id, email")
+          .select("role, store_id")
           .eq("user_id", authData.user.id)
           .eq("is_active", true)
           .maybeSingle()
 
-        console.log("📊 [LOGIN] Store admin query result:", { storeAdmin, storeAdminError })
-
         if (storeAdmin) {
-          // المستخدم موجود كـ store admin
-          profile = {
-            role: storeAdmin.role === "owner" ? "admin" : storeAdmin.role,
-            store_id: storeAdmin.store_id
-          }
-          console.log("✅ [LOGIN] Found store admin, mapped role:", profile.role)
+          hasAccess = true
         }
       }
 
-      if (!profile) {
-        console.error("❌ [LOGIN] No profile or store_admin found for user")
-        throw new Error("لم يتم العثور على بيانات المستخدم. تأكد من إنشاء متجر أولاً.")
-      }
-
-      console.log("✅ [LOGIN] Profile/Admin found, role:", profile.role)
-
-      // السماح لـ admin, store_owner, owner
-      const allowedRoles = ["admin", "store_owner", "owner", "super_admin"]
-      if (!allowedRoles.includes(profile.role)) {
-        console.warn("⚠️ [LOGIN] User is not admin, role:", profile.role)
+      if (!hasAccess) {
         await supabase.auth.signOut()
         throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
       }
 
-      // Clear user-specific cache on successful login
-      try {
-        const { clearUserCacheOnLogin } = await import("@/lib/client/clearClientData")
-        await clearUserCacheOnLogin()
-      } catch (e) {
-        // Best effort - ignore errors
-      }
+      toast({ 
+        title: "تم تسجيل الدخول بنجاح", 
+        description: "مرحباً بك في لوحة التحكم" 
+      })
 
-      console.log("🎉 [LOGIN] Admin login successful!")
-      toast({ title: "تم تسجيل الدخول", description: "مرحباً بك في لوحة التحكم" })
-      router.push("/admin")
-      router.refresh()
+      // Use window.location for a full page reload to ensure cookies are set
+      window.location.href = "/admin"
+      
     } catch (error: any) {
-      console.error("💥 [LOGIN] Final error:", error)
+      console.error("Login error:", error)
       toast({
-        title: "خطأ",
-        description: error.message || "فشل تسجيل الدخول",
+        title: "خطأ في تسجيل الدخول",
+        description: error.message || "حدث خطأ غير متوقع",
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -121,6 +138,7 @@ export default function AdminLoginPage() {
         <ArrowRight className="h-4 w-4 ml-2" />
         العودة للخلف
       </Button>
+      
       <Card className="w-full max-w-md shadow-lg rounded-xl">
         <CardHeader className="text-center">
           <div className="mx-auto mb-6">
@@ -136,6 +154,7 @@ export default function AdminLoginPage() {
           <CardTitle className="text-2xl font-bold">تسجيل دخول المسؤول</CardTitle>
           <CardDescription>أدخل بيانات الدخول للوصول إلى لوحة التحكم</CardDescription>
         </CardHeader>
+        
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -149,24 +168,38 @@ export default function AdminLoginPage() {
                 required
                 disabled={loading}
                 className="rounded-lg"
+                autoComplete="email"
               />
             </div>
+            
             <div>
               <Label htmlFor="password">كلمة المرور</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                disabled={loading}
-                className="rounded-lg"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                  className="rounded-lg pr-10"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
+            
             <Button type="submit" className="w-full rounded-lg" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "تسجيل الدخول"}
             </Button>
+            
             <div className="mt-4 text-center text-sm">
               <span className="text-muted-foreground">ليس لديك حساب؟ </span>
               <a href="/admin/signup" className="text-primary hover:underline">

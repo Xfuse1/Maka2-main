@@ -13,13 +13,12 @@ interface DesignSyncProviderProps {
 export function DesignSyncProvider({ children }: DesignSyncProviderProps) {
   const { setColors, setFonts, setLayouts, setLogo } = useDesignStore()
 
-  // تطبيق الألوان فوراً على CSS variables
+  // تطبيق الألوان فوراً على CSS variables (بدون inline styles عشان نتجنب hydration mismatch)
   const applyColorsImmediately = (colors: any) => {
     if (!colors) return
     const root = document.documentElement
-    const body = document.body
 
-    // Our custom hex vars
+    // Our custom hex vars - CSS will use these via var()
     root.style.setProperty("--primary-hex", colors.primary)
     root.style.setProperty("--secondary-hex", colors.secondary ?? colors.primary)
     root.style.setProperty("--background-hex", colors.background)
@@ -29,21 +28,10 @@ export function DesignSyncProvider({ children }: DesignSyncProviderProps) {
     root.style.setProperty("--primary", colors.primary)
     root.style.setProperty("--background", colors.background)
     root.style.setProperty("--foreground", colors.foreground)
-    
+
     if (colors.secondary) {
       root.style.setProperty("--secondary", colors.secondary)
     }
-
-    body.style.backgroundColor = colors.background
-    root.style.backgroundColor = colors.background
-    body.style.color = colors.foreground
-
-    const containers = document.querySelectorAll(
-      "body, html, #__next, main, .bg-background"
-    )
-    containers.forEach((el) => {
-      ;(el as HTMLElement).style.backgroundColor = colors.background
-    })
   }
 
   // تطبيق الفونتس فوراً
@@ -52,7 +40,6 @@ export function DesignSyncProvider({ children }: DesignSyncProviderProps) {
     const root = document.documentElement
     root.style.setProperty("--font-heading", fonts.heading)
     root.style.setProperty("--font-body", fonts.body)
-    document.body.style.fontFamily = fonts.body
   }
 
   // تطبيق الـ layout فوراً

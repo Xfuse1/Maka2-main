@@ -128,7 +128,7 @@ export default async function HomePage() {
     getHomepageSections(storeId),
     getCategoriesCached(storeId),
     getHeroSlides(storeId),
-    getStoreSettingsServer(),
+    getStoreSettingsServer(storeId),
   ])
 
   const storeName = storeSettings?.store_name || "متجرك"

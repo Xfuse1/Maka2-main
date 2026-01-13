@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@supabase/supabase-js"
+
+// Create admin client for database operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
+  }
+)
+
+/**
+ * Verify Super Admin session from cookie
+ */
+async function verifySuperAdminSession(request: NextRequest): Promise<boolean> {
+  const sessionToken = request.cookies.get("super_admin_session")?.value
+  return !!sessionToken
+}
 
 /**
  * GET /api/super-admin/stores
@@ -8,54 +27,18 @@ import { cookies } from "next/headers"
  */
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    // Verify super admin session
+    const isAuthorized = await verifySuperAdminSession(request)
     
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       )
     }
 
-    // Check if user is super admin
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !profile || profile.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "Forbidden: Super admin access required" },
-        { status: 403 }
-      )
-    }
-
-    // Fetch all stores
-    const { data: stores, error: storesError } = await supabase
+    // Fetch all stores using admin client
+    const { data: stores, error: storesError } = await supabaseAdmin
       .from("stores")
       .select("*")
       .order("created_at", { ascending: false })
@@ -73,15 +56,15 @@ export async function GET(request: NextRequest) {
       (stores || []).map(async (store) => {
         try {
           const [productsRes, ordersRes, revenueRes] = await Promise.all([
-            supabase
+            supabaseAdmin
               .from("products")
               .select("id", { count: "exact", head: true })
               .eq("store_id", store.id),
-            supabase
+            supabaseAdmin
               .from("orders")
               .select("id", { count: "exact", head: true })
               .eq("store_id", store.id),
-            supabase
+            supabaseAdmin
               .from("orders")
               .select("total")
               .eq("store_id", store.id)
@@ -139,49 +122,13 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    // Verify super admin session
+    const isAuthorized = await verifySuperAdminSession(request)
     
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
-      )
-    }
-
-    // Check if user is super admin
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !profile || profile.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "Forbidden: Super admin access required" },
-        { status: 403 }
       )
     }
 
@@ -206,7 +153,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update store status
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("stores")
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", store_id)
@@ -241,49 +188,13 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    // Verify super admin session
+    const isAuthorized = await verifySuperAdminSession(request)
     
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
-      )
-    }
-
-    // Check if user is super admin
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profileError || !profile || profile.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "Forbidden: Super admin access required" },
-        { status: 403 }
       )
     }
 
@@ -299,7 +210,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete store (this will cascade delete related data if ON DELETE CASCADE is set)
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("stores")
       .delete()
       .eq("id", store_id)

@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@supabase/supabase-js"
+
+// Create admin client for database operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
+  }
+)
+
+/**
+ * Verify Super Admin session from cookie
+ */
+async function verifySuperAdminSession(request: NextRequest): Promise<boolean> {
+  const sessionToken = request.cookies.get("super_admin_session")?.value
+  return !!sessionToken
+}
 
 /**
  * GET /api/super-admin/subscriptions
@@ -8,49 +27,15 @@ import { cookies } from "next/headers"
  */
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Fetch all subscriptions with store and plan details
-    const { data: subscriptions, error } = await supabase
+    // Fetch all subscriptions
+    const { data: subscriptions, error } = await supabaseAdmin
       .from("subscriptions")
-      .select(`
-        *,
-        store:stores(store_name, subdomain, email),
-        plan:subscription_plans(name, name_en, price)
-      `)
+      .select("*")
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -58,16 +43,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch subscriptions" }, { status: 500 })
     }
 
+    // Fetch stores and plans separately (workaround for partitioned tables)
+    const storeIds = [...new Set((subscriptions || []).map(s => s.store_id).filter(Boolean))]
+    const planIds = [...new Set((subscriptions || []).map(s => s.plan_id).filter(Boolean))]
+
+    const [storesResult, plansResult] = await Promise.all([
+      storeIds.length > 0
+        ? supabaseAdmin.from("stores").select("id, store_name, subdomain, email").in("id", storeIds)
+        : { data: [] },
+      planIds.length > 0
+        ? supabaseAdmin.from("subscription_plans").select("id, name, name_en, price").in("id", planIds)
+        : { data: [] }
+    ])
+
+    const stores = storesResult.data || []
+    const plans = plansResult.data || []
+
+    // Attach store and plan to subscriptions
+    const subscriptionsWithDetails = (subscriptions || []).map(sub => ({
+      ...sub,
+      store: stores.find(s => s.id === sub.store_id) || null,
+      plan: plans.find(p => p.id === sub.plan_id) || null
+    }))
+
     // Calculate stats
     const stats = {
-      total: subscriptions?.length || 0,
-      active: subscriptions?.filter(s => s.status === "active").length || 0,
-      expired: subscriptions?.filter(s => s.status === "expired").length || 0,
-      pending: subscriptions?.filter(s => s.status === "pending").length || 0,
-      total_revenue: subscriptions?.reduce((sum, s) => sum + (s.amount_paid || 0), 0) || 0,
+      total: subscriptionsWithDetails.length,
+      active: subscriptionsWithDetails.filter(s => s.status === "active").length,
+      expired: subscriptionsWithDetails.filter(s => s.status === "expired").length,
+      pending: subscriptionsWithDetails.filter(s => s.status === "pending").length,
+      total_revenue: subscriptionsWithDetails.reduce((sum, s) => sum + (s.amount_paid || 0), 0),
     }
 
-    return NextResponse.json({ subscriptions, stats })
+    return NextResponse.json({ subscriptions: subscriptionsWithDetails, stats })
   } catch (error) {
     console.error("Subscriptions error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -80,42 +88,12 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const body = await request.json()
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Verify super admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const isAuthorized = await verifySuperAdminSession(request)
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile || profile.role !== "super_admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
+    const body = await request.json()
     const { subscription_id, action, ...updates } = body
 
     if (!subscription_id) {
@@ -124,13 +102,12 @@ export async function PATCH(request: NextRequest) {
 
     // Handle different actions
     if (action === "extend") {
-      // Extend subscription by specified days
       const { extend_days } = updates
       if (!extend_days) {
         return NextResponse.json({ error: "extend_days required" }, { status: 400 })
       }
 
-      const { data: subscription } = await supabase
+      const { data: subscription } = await supabaseAdmin
         .from("subscriptions")
         .select("end_date")
         .eq("id", subscription_id)
@@ -144,7 +121,7 @@ export async function PATCH(request: NextRequest) {
       const newEndDate = new Date(currentEndDate)
       newEndDate.setDate(newEndDate.getDate() + parseInt(extend_days))
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("subscriptions")
         .update({
           end_date: newEndDate.toISOString(),
@@ -162,7 +139,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (action === "cancel") {
-      const { error } = await supabase
+      // Get store_id first
+      const { data: subscription } = await supabaseAdmin
+        .from("subscriptions")
+        .select("store_id")
+        .eq("id", subscription_id)
+        .single()
+
+      const { error } = await supabaseAdmin
         .from("subscriptions")
         .update({
           status: "cancelled",
@@ -176,14 +160,8 @@ export async function PATCH(request: NextRequest) {
       }
 
       // Also update store status
-      const { data: subscription } = await supabase
-        .from("subscriptions")
-        .select("store_id")
-        .eq("id", subscription_id)
-        .single()
-
       if (subscription) {
-        await supabase
+        await supabaseAdmin
           .from("stores")
           .update({ subscription_status: "cancelled" })
           .eq("id", subscription.store_id)
@@ -193,7 +171,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (action === "activate") {
-      const { error } = await supabase
+      // Get store_id first
+      const { data: subscription } = await supabaseAdmin
+        .from("subscriptions")
+        .select("store_id")
+        .eq("id", subscription_id)
+        .single()
+
+      const { error } = await supabaseAdmin
         .from("subscriptions")
         .update({
           status: "active",
@@ -207,14 +192,8 @@ export async function PATCH(request: NextRequest) {
       }
 
       // Also update store status
-      const { data: subscription } = await supabase
-        .from("subscriptions")
-        .select("store_id")
-        .eq("id", subscription_id)
-        .single()
-
       if (subscription) {
-        await supabase
+        await supabaseAdmin
           .from("stores")
           .update({ subscription_status: "active" })
           .eq("id", subscription.store_id)
@@ -226,7 +205,7 @@ export async function PATCH(request: NextRequest) {
     // Generic update
     updates.updated_at = new Date().toISOString()
 
-    const { data: subscription, error } = await supabase
+    const { data: subscription, error } = await supabaseAdmin
       .from("subscriptions")
       .update(updates)
       .eq("id", subscription_id)

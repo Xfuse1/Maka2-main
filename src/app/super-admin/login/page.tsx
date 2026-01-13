@@ -115,8 +115,8 @@ export default function SuperAdminLoginPage() {
       localStorage.removeItem("super_admin_attempts")
       localStorage.removeItem("super_admin_blocked_until")
       
-      // حفظ token في cookie آمن (يتم من الـ API)
-      router.push("/super-admin")
+      // استخدام window.location لضمان حفظ الـ cookies
+      window.location.href = "/super-admin"
       
     } catch (err) {
       console.error("Login error:", err)
