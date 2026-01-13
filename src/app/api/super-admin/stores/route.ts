@@ -184,7 +184,12 @@ export async function PATCH(request: NextRequest) {
 
 /**
  * DELETE /api/super-admin/stores
- * Delete a store (super admin only)
+ * Delete a store and all its associated data (super admin only)
+ * 
+ * This function performs a comprehensive deletion:
+ * 1. Deletes all related files from storage buckets
+ * 2. Deletes related database records via cascade
+ * 3. Finally deletes the store record
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -209,23 +214,134 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete store (this will cascade delete related data if ON DELETE CASCADE is set)
-    const { error } = await supabaseAdmin
+    // Get store data first (to get folder paths for storage cleanup)
+    const { data: store, error: storeError } = await supabaseAdmin
+      .from("stores")
+      .select("id, subdomain, slug")
+      .eq("id", store_id)
+      .single()
+
+    if (storeError || !store) {
+      return NextResponse.json(
+        { error: "Store not found" },
+        { status: 404 }
+      )
+    }
+
+    // List of storage buckets and their folder patterns
+    const storageBuckets = [
+      { name: "products", folderPattern: store_id },
+      { name: "product-images", folderPattern: store_id },
+      { name: "categories", folderPattern: store_id },
+      { name: "hero-slides", folderPattern: store_id },
+      { name: "page-images", folderPattern: store_id },
+      { name: "logo-storage", folderPattern: store_id },
+      { name: "profile-images", folderPattern: store_id },
+    ]
+
+    // Delete files from all storage buckets
+    for (const bucket of storageBuckets) {
+      try {
+        const { data: files, error: listError } = await supabaseAdmin.storage
+          .from(bucket.name)
+          .list(bucket.folderPattern, {
+            limit: 100,
+            offset: 0,
+            sortBy: { column: "name", order: "asc" },
+          })
+
+        if (!listError && files && files.length > 0) {
+          const filePaths = files.map((f) => `${bucket.folderPattern}/${f.name}`)
+          
+          const { error: deleteError } = await supabaseAdmin.storage
+            .from(bucket.name)
+            .remove(filePaths)
+
+          if (deleteError) {
+            console.warn(`Warning deleting files from ${bucket.name}:`, deleteError)
+          } else {
+            console.log(`✅ Deleted ${filePaths.length} files from ${bucket.name}`)
+          }
+        }
+      } catch (error) {
+        console.warn(`Warning processing bucket ${bucket.name}:`, error)
+        // Continue with other buckets even if one fails
+      }
+    }
+
+    // Delete store_admins table entries
+    const { error: adminsError } = await supabaseAdmin
+      .from("store_admins")
+      .delete()
+      .eq("store_id", store_id)
+
+    if (adminsError) {
+      console.warn("Warning deleting store_admins:", adminsError)
+    }
+
+    // Delete all user profiles for this store
+    const { data: profiles, error: profilesListError } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("store_id", store_id)
+
+    if (!profilesListError && profiles && profiles.length > 0) {
+      const userIds = profiles.map((p) => p.id)
+      
+      const { error: profilesDeleteError } = await supabaseAdmin
+        .from("profiles")
+        .delete()
+        .in("id", userIds)
+
+      if (profilesDeleteError) {
+        console.warn("Warning deleting profiles:", profilesDeleteError)
+      }
+    }
+
+    // Delete the store - this should cascade delete all related data
+    // due to ON DELETE CASCADE foreign keys:
+    // - products
+    // - product_variants
+    // - product_images
+    // - product_reviews
+    // - categories
+    // - orders
+    // - order_items
+    // - customers
+    // - design_settings
+    // - store_settings
+    // - hero_slides
+    // - homepage_sections
+    // - page_content
+    // - discount_coupons
+    // - shipping_zones
+    // - payment_offers
+    // - contact_messages
+    // - addresses
+    // - etc.
+    const { error: storeDeleteError } = await supabaseAdmin
       .from("stores")
       .delete()
       .eq("id", store_id)
 
-    if (error) {
-      console.error("Error deleting store:", error)
+    if (storeDeleteError) {
+      console.error("Error deleting store:", storeDeleteError)
       return NextResponse.json(
-        { error: "Failed to delete store. It may contain related data." },
+        { error: "Failed to delete store. Please check the database logs." },
         { status: 500 }
       )
     }
 
+    console.log(`✅ Store ${store_id} (${store.subdomain}) deleted successfully with all its data`)
+
     return NextResponse.json({
       success: true,
-      message: "Store deleted successfully",
+      message: `Store "${store.subdomain}" and all associated data deleted successfully`,
+      deletedStore: {
+        id: store_id,
+        subdomain: store.subdomain,
+        slug: store.slug,
+      }
     })
   } catch (error) {
     console.error("Unexpected error in DELETE super-admin/stores:", error)

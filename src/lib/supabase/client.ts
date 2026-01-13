@@ -60,7 +60,6 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> {
         detectSessionInUrl: true,
         persistSession: true,
         autoRefreshToken: true,
-        storageKey: "supabase-auth",
       },
       global: {
         headers: storeSubdomain ? {
@@ -70,36 +69,6 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> {
     })
   }
   return browserClient
-}
-
-// Keep the original createClient for backward compatibility
-export function createClient(): SupabaseClient<Database> {
-  return getSupabaseBrowserClient()
-}
-
-// Create a store-specific Supabase client (for explicit store context)
-export function createStoreClient(storeId: string, storeSubdomain: string): SupabaseClient<Database> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Missing Supabase environment variables. Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
-    )
-  }
-
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      flowType: "pkce",
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: {
-        "x-store-id": storeId,
-        "x-store-subdomain": storeSubdomain,
-      },
-    },
-  })
 }
 
 // Reset client (useful when switching stores)

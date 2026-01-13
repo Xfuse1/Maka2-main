@@ -1,11 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
+import { createServerClient } from "@supabase/ssr"
 
-// GET: returns settings for current store
-export async function GET() {
+/**
+ * GET /api/admin/design/settings
+ * 
+ * Returns design settings for current store
+ * Works for both:
+ * 1. Authenticated admin users (via auth session)
+ * 2. Store pages via subdomain (x-store-id header from middleware)
+ */
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdminClient() as any
-    const storeId = await getStoreIdFromRequest()
+    let storeId: string | null = null
+
+    // 1. Try to get store_id from middleware headers (for subdomain requests)
+    const headerStoreId = request.headers.get("x-store-id")
+    if (headerStoreId) {
+      storeId = headerStoreId
+    } else {
+      // 2. Try to get from authenticated user
+      try {
+        storeId = await getStoreIdFromRequest()
+      } catch (error) {
+        // If both fail, return unauthorized
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        )
+      }
+    }
 
     const { data, error } = await supabase
       .from("design_settings")

@@ -99,7 +99,8 @@ export async function POST(request: NextRequest) {
     const userId = authData.user.id
     console.log("[API] User created with ID:", userId)
 
-    // إنشاء profile للمستخدم الجديد
+    // ملاحظة: سيتم تحديث store_id بعد إنشاء المتجر
+    // إنشاء profile للمستخدم الجديد (بدون store_id في البداية)
     const { error: profileCreateError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
         email: email,
         role: "store_owner",
         full_name: store_name + " Admin",
+        store_id: null, // سيتم تحديثه لاحقاً
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -233,15 +235,40 @@ export async function POST(request: NextRequest) {
     }
 
     // تحديث store_id في profile المستخدم
-    const { error: profileUpdateError } = await (supabaseAdmin as any)
+    console.log("[API] Updating profile with store_id:", (newStore as any).id, "for user:", userId)
+    const { error: profileUpdateError, data: updatedProfile } = await (supabaseAdmin as any)
       .from("profiles")
       .update({ 
         store_id: (newStore as any).id  // ربط المستخدم بالمتجر
       })
       .eq("id", userId)
+      .select()
 
     if (profileUpdateError) {
       console.error("[API] Error updating profile store_id:", profileUpdateError)
+      // إذا فشل التحديث، تحقق من وجود الـ profile
+      const { data: existingProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single()
+      
+      if (!existingProfile) {
+        console.warn("[API] Profile doesn't exist, creating it now with store_id")
+        await supabaseAdmin
+          .from("profiles")
+          .insert({
+            id: userId,
+            email: email,
+            role: "store_owner",
+            full_name: store_name + " Admin",
+            store_id: (newStore as any).id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+      }
+    } else {
+      console.log("[API] Profile updated successfully with store_id:", (newStore as any).id)
     }
 
     // إنشاء سجل store_admins لربط المستخدم كمدير للمتجر

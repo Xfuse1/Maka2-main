@@ -56,7 +56,26 @@ export async function middleware(request: NextRequest) {
     const subdomain = extractSubdomain(hostname)
     
     if (subdomain) {
-      // API routes from subdomains - need to lookup store and add x-store-id header
+      // Admin routes from subdomains - need store ownership verification
+      if (pathname.startsWith("/admin")) {
+        // Allow login page without auth
+        if (pathname === "/admin/login") {
+          return handleStoreSubdomainApi(request, subdomain)
+        }
+        return handleStoreAdminAuth(request, subdomain)
+      }
+      // Public design API endpoints from subdomains (no auth required)
+      if (
+        pathname === "/api/admin/design/settings" ||
+        pathname === "/api/admin/design/logo"
+      ) {
+        return handleStoreSubdomainApi(request, subdomain)
+      }
+      // Admin API routes from subdomains (requires auth)
+      if (pathname.startsWith("/api/admin")) {
+        return handleStoreAdminApiAuth(request, subdomain)
+      }
+      // Other API routes from subdomains - need to lookup store and add x-store-id header
       if (pathname.startsWith("/api/")) {
         return handleStoreSubdomainApi(request, subdomain)
       }
@@ -272,6 +291,132 @@ async function handleSuperAdminApiAuth(request: NextRequest): Promise<NextRespon
   response.headers.set("x-is-super-admin", "true")
 
   return response
+}
+
+// =============================================================================
+// STORE-SPECIFIC ADMIN AUTH (for subdomain admin access)
+// =============================================================================
+
+async function handleStoreAdminAuth(request: NextRequest, subdomain: string): Promise<NextResponse> {
+  const { supabase } = createSupabaseMiddlewareClient(request)
+
+  try {
+    console.log(`[Middleware] handleStoreAdminAuth - subdomain: ${subdomain}`)
+    
+    // 1. First lookup the store by subdomain
+    const { data: store, error: storeError } = await supabase
+      .from("stores")
+      .select("id, subdomain, status")
+      .eq("subdomain", subdomain)
+      .single()
+
+    if (storeError || !store) {
+      console.log(`[Middleware] Store not found for subdomain: ${subdomain}`, storeError)
+      return NextResponse.rewrite(new URL("/store-not-found", request.url))
+    }
+
+    console.log(`[Middleware] Store found: ${store.id}`)
+
+    // 2. Authenticate user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      console.log(`[Middleware] User not authenticated: ${userError?.message}`)
+      return redirectToLogin(request, "/admin/login")
+    }
+
+    console.log(`[Middleware] User authenticated: ${user.id}`)
+
+    // 3. Get user profile and verify store ownership
+    const profile = await getUserProfile(supabase, user.id)
+
+    console.log(`[Middleware] User profile:`, profile)
+
+    if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+      console.log(`[Middleware] User has no admin role or no profile`)
+      return redirectToLogin(request, "/admin/login")
+    }
+
+    // 4. CRITICAL: Verify user belongs to this store
+    console.log(`[Middleware] Checking store ownership - user.store_id: ${profile.store_id}, store.id: ${store.id}`)
+    if (!profile.store_id || profile.store_id !== store.id) {
+      // User is logged in but doesn't own this store - redirect to login
+      // Sign them out first to clear session
+      console.log(`[Middleware] Store ownership check FAILED - signing out user`)
+      await supabase.auth.signOut()
+      return redirectToLogin(request, "/admin/login")
+    }
+
+    console.log(`[Middleware] Store ownership verified! Setting headers and allowing access`)
+
+    // 5. User is authenticated and owns this store - set headers
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-store-id", store.id)
+    requestHeaders.set("x-store-subdomain", store.subdomain)
+    requestHeaders.set("x-user-role", profile.role)
+    requestHeaders.set("x-user-store-id", profile.store_id)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  } catch (error) {
+    console.error("[middleware] Store admin auth error:", error)
+    return redirectToLogin(request, "/admin/login")
+  }
+}
+
+async function handleStoreAdminApiAuth(request: NextRequest, subdomain: string): Promise<NextResponse> {
+  const { supabase } = createSupabaseMiddlewareClient(request)
+
+  try {
+    // 1. First lookup the store by subdomain
+    const { data: store, error: storeError } = await supabase
+      .from("stores")
+      .select("id, subdomain")
+      .eq("subdomain", subdomain)
+      .single()
+
+    if (storeError || !store) {
+      return NextResponse.json({ error: "Store not found" }, { status: 404 })
+    }
+
+    // 2. Authenticate user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // 3. Get user profile and verify store ownership
+    const profile = await getUserProfile(supabase, user.id)
+
+    if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // 4. CRITICAL: Verify user belongs to this store
+    if (!profile.store_id || profile.store_id !== store.id) {
+      return NextResponse.json({ error: "Access denied to this store" }, { status: 403 })
+    }
+
+    // 5. User is authenticated and owns this store - set headers
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-store-id", store.id)
+    requestHeaders.set("x-store-subdomain", store.subdomain)
+    requestHeaders.set("x-user-role", profile.role)
+    requestHeaders.set("x-user-store-id", profile.store_id)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  } catch (error) {
+    console.error("[middleware] Store admin API auth error:", error)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 }
 
 // =============================================================================

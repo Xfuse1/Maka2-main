@@ -12,26 +12,119 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, ArrowRight, Eye, EyeOff } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
+// Helper to extract subdomain from hostname
+function getSubdomain(): string | null {
+  if (typeof window === "undefined") return null
+
+  const hostname = window.location.hostname
+  const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
+
+  // Handle localhost with subdomain (e.g., store1.localhost)
+  if (hostname.endsWith(".localhost")) {
+    const subdomain = hostname.replace(".localhost", "")
+    if (subdomain && subdomain !== "www") {
+      return subdomain
+    }
+    return null
+  }
+
+  // Handle localhost without subdomain
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return null
+  }
+
+  const cleanHost = hostname.replace(/^www\./, "")
+
+  if (!cleanHost.endsWith(platformDomain)) {
+    return null
+  }
+
+  const subdomain = cleanHost.replace(`.${platformDomain}`, "")
+
+  if (!subdomain || subdomain === platformDomain) {
+    return null
+  }
+
+  return subdomain
+}
+
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
+  const [storeName, setStoreName] = useState<string | null>(null)
+  const [storeId, setStoreId] = useState<string | null>(null)
   const router = useRouter()
   const { toast } = useToast()
+  const subdomain = getSubdomain()
 
-  // Check if user is already logged in
+  // Load store info if on subdomain
   useEffect(() => {
-    const checkSession = async () => {
+    const loadStore = async () => {
+      if (!subdomain) {
+        setCheckingSession(false)
+        return
+      }
+
       try {
+        // Use API endpoint instead of direct DB query (safer)
+        const storeResponse = await fetch(`/api/stores/check?subdomain=${encodeURIComponent(subdomain)}`)
+        
+        if (!storeResponse.ok) {
+          toast({
+            title: "خطأ",
+            description: "المتجر غير موجود",
+            variant: "destructive",
+          })
+          setCheckingSession(false)
+          return
+        }
+
+        const { store } = await storeResponse.json()
+        setStoreId(store.id)
+        setStoreName(store.store_name)
+
+        // Check if user is already logged in with correct store
         const supabase = getSupabaseBrowserClient()
         const { data: { session } } = await supabase.auth.getSession()
-        
+
         if (session?.user) {
-          // User is already logged in, redirect to admin
-          router.replace("/admin")
-          return
+          // Verify user belongs to this store - check both tables
+          let userStoreId: string | null = null
+
+          // Check profiles table first
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("store_id")
+            .eq("id", session.user.id)
+            .maybeSingle() as { data: { store_id: string | null } | null; error: any }
+
+          if (profile?.store_id) {
+            userStoreId = profile.store_id
+          } else {
+            // Fallback to store_admins
+            const { data: storeAdmin } = await supabase
+              .from("store_admins")
+              .select("store_id")
+              .eq("user_id", session.user.id)
+              .eq("is_active", true)
+              .maybeSingle() as { data: { store_id: string } | null; error: any }
+
+            if (storeAdmin?.store_id) {
+              userStoreId = storeAdmin.store_id
+            }
+          }
+
+          // If user owns this store, redirect to admin
+          if (userStoreId === store.id) {
+            router.replace("/admin")
+            return
+          } else if (userStoreId) {
+            // User owns a different store - sign out
+            await supabase.auth.signOut()
+          }
         }
       } catch (error) {
         console.error("Session check error:", error)
@@ -39,9 +132,9 @@ export default function AdminLoginPage() {
         setCheckingSession(false)
       }
     }
-    
-    checkSession()
-  }, [router])
+
+    loadStore()
+  }, [subdomain, router, toast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,16 +142,16 @@ export default function AdminLoginPage() {
 
     try {
       const supabase = getSupabaseBrowserClient()
-      
+
       // Sign in with email and password
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
-        email: email.trim().toLowerCase(), 
-        password 
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password
       })
 
       if (authError) {
-        throw new Error(authError.message === "Invalid login credentials" 
-          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" 
+        throw new Error(authError.message === "Invalid login credentials"
+          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
           : authError.message)
       }
 
@@ -66,18 +159,25 @@ export default function AdminLoginPage() {
         throw new Error("فشل تسجيل الدخول")
       }
 
+      console.log("[Login] User authenticated:", authData.user.id)
+
       // Verify user has admin role (profiles or store_admins)
       let hasAccess = false
+      let userStoreId: string | null = null
 
       // Check profiles table
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, store_id")
         .eq("id", authData.user.id)
-        .maybeSingle()
+        .maybeSingle() as { data: { role: string; store_id: string | null } | null; error: any }
+
+      console.log("[Login] Profile check:", { profile, storeId, subdomain })
 
       if (profile && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role)) {
         hasAccess = true
+        userStoreId = profile.store_id
+        console.log("[Login] Access granted via profiles table:", { userStoreId })
       }
 
       // If not in profiles, check store_admins
@@ -87,26 +187,67 @@ export default function AdminLoginPage() {
           .select("role, store_id")
           .eq("user_id", authData.user.id)
           .eq("is_active", true)
-          .maybeSingle()
+          .maybeSingle() as { data: { role: string; store_id: string } | null; error: any }
+
+        console.log("[Login] Store_admins check:", { storeAdmin })
 
         if (storeAdmin) {
           hasAccess = true
+          userStoreId = storeAdmin.store_id
+          console.log("[Login] Access granted via store_admins table:", { userStoreId })
         }
       }
 
       if (!hasAccess) {
+        console.error("[Login] No access - user has no admin role")
         await supabase.auth.signOut()
         throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
       }
 
-      toast({ 
-        title: "تم تسجيل الدخول بنجاح", 
-        description: "مرحباً بك في لوحة التحكم" 
+      // CRITICAL: If on a subdomain, verify user owns THIS store
+      // Check if userStoreId is set and matches current store
+      if (storeId) {
+        console.log("[Login] Verifying store ownership:", { storeId, userStoreId, subdomain })
+        if (!userStoreId || userStoreId !== storeId) {
+          console.error("[Login] Store ownership verification failed", { storeId, userStoreId })
+          await supabase.auth.signOut()
+          throw new Error("هذا الحساب لا يملك صلاحية الوصول لهذا المتجر")
+        }
+        console.log("[Login] Store ownership verified!")
+      }
+
+      console.log("[Login] All checks passed, redirecting to /admin")
+
+      // Helper to log to both console and localStorage for debugging
+      const debugLog = (msg: string) => {
+        console.log(msg)
+        if (typeof window !== "undefined") {
+          const logs = JSON.parse(localStorage.getItem("login-debug-logs") || "[]") as string[]
+          logs.push(`${new Date().toISOString()}: ${msg}`)
+          localStorage.setItem("login-debug-logs", JSON.stringify(logs.slice(-20))) // Keep last 20 logs
+        }
+      }
+
+      // Wait a bit to ensure session is saved to cookies
+      debugLog("[Login] Checking session before redirect...")
+      const { data: { session } } = await supabase.auth.getSession()
+      debugLog(`[Login] Current session after auth: ${session?.user?.email}`)
+      
+      // Also check cookies directly
+      if (typeof window !== "undefined") {
+        debugLog(`[Login] Current cookies: ${document.cookie}`)
+      }
+
+      toast({
+        title: "تم تسجيل الدخول بنجاح",
+        description: storeName ? `مرحباً بك في لوحة تحكم ${storeName}` : "مرحباً بك في لوحة التحكم"
       })
 
-      // Use window.location for a full page reload to ensure cookies are set
-      window.location.href = "/admin"
+      debugLog("[Login] Redirecting to /admin...")
       
+      // Use router.push instead of window.location for client-side navigation (no full page reload)
+      router.push("/admin")
+
     } catch (error: any) {
       console.error("Login error:", error)
       toast({

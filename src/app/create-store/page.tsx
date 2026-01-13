@@ -238,7 +238,8 @@ function CreateStoreContent() {
       
       alert(`تم إنشاء متجرك بنجاح!\n\nيمكنك الوصول إليه عبر:\n${storeUrl}\n\nسيتم إعادة توجيهك الآن...`)
       
-      window.location.href = `${storeUrl}/admin`
+      // توجيه للـ admin login مع صفحة المتجر - سيتم تسجيل دخول آلي بـ email و password
+      window.location.href = `${storeUrl}/admin/login`
 
     } catch (err) {
       console.error("Error creating store:", err)

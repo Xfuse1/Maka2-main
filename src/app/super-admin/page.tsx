@@ -95,6 +95,8 @@ export default function SuperAdminDashboard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [activeTab, setActiveTab] = useState("stores")
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState("")
 
   // Check if user is super admin
   useEffect(() => {
@@ -205,21 +207,44 @@ export default function SuperAdminDashboard() {
 
   const handleDeleteStore = async () => {
     if (!selectedStore) return
+    
+    // Validate confirmation text
+    if (deleteConfirmation !== selectedStore.subdomain) {
+      alert(`يجب أن تكتب "${selectedStore.subdomain}" للتأكيد`)
+      return
+    }
 
+    setIsDeleting(true)
     try {
-      const { error } = await supabase
-        .from("stores")
-        .delete()
-        .eq("id", selectedStore.id)
+      const response = await fetch(
+        `/api/super-admin/stores?store_id=${selectedStore.id}`,
+        { 
+          method: "DELETE",
+          credentials: "include", // Important: include cookies for super admin auth
+        }
+      )
 
-      if (error) throw error
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "فشل حذف المتجر")
+      }
 
+      const data = await response.json()
+      
       setIsDeleteDialogOpen(false)
       setSelectedStore(null)
-      loadDashboardData()
+      setDeleteConfirmation("")
+      
+      // Show success message
+      alert(`تم حذف المتجر "${selectedStore.store_name}" وجميع بياناته بنجاح`)
+      
+      // Reload dashboard
+      await loadDashboardData()
     } catch (error) {
       console.error("Error deleting store:", error)
-      alert("فشل حذف المتجر. قد يحتوي على بيانات مرتبطة.")
+      alert(`فشل حذف المتجر: ${error instanceof Error ? error.message : "خطأ غير معروف"}`)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -506,23 +531,64 @@ export default function SuperAdminDashboard() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>تأكيد الحذف</DialogTitle>
-            <DialogDescription>
-              هل أنت متأكد من حذف المتجر "{selectedStore?.store_name}"؟
-              <br />
-              سيتم حذف جميع البيانات المرتبطة بالمتجر (المنتجات، الطلبات، إلخ).
-              <br />
-              <span className="text-red-600 font-semibold">هذا الإجراء لا يمكن التراجع عنه!</span>
-            </DialogDescription>
+            <DialogTitle className="text-red-600">تحذير: حذف نهائي للمتجر</DialogTitle>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+          
+          <div className="space-y-3 py-4">
+            <div>
+              <p className="font-semibold text-foreground">هل أنت متأكد من حذف المتجر "{selectedStore?.store_name}"؟</p>
+            </div>
+            
+            <div className="bg-red-50 border border-red-200 rounded p-3">
+              <p className="text-red-800 text-sm font-semibold">⚠️ هذا الإجراء سيحذف:</p>
+              <ul className="text-red-700 text-sm mt-2 ml-4 list-disc space-y-1">
+                <li>جميع المنتجات والفئات</li>
+                <li>جميع الطلبات والعملاء</li>
+                <li>جميع الصور والملفات</li>
+                <li>إعدادات المتجر والتصميم</li>
+                <li>جميع البيانات الأخرى المرتبطة</li>
+              </ul>
+            </div>
+            
+            <div>
+              <p className="text-sm mb-2">للتأكيد، اكتب اسم النطاق للمتجر:</p>
+              <p className="font-mono bg-gray-100 px-2 py-1 rounded text-sm mb-2">
+                {selectedStore?.subdomain}
+              </p>
+              <Input
+                type="text"
+                placeholder={selectedStore?.subdomain || ""}
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                disabled={isDeleting}
+                className="text-sm"
+              />
+            </div>
+            
+            <p className="text-red-600 font-semibold text-sm">⚠️ لا يمكن التراجع عن هذا الإجراء!</p>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsDeleteDialogOpen(false)
+                setDeleteConfirmation("")
+              }}
+              disabled={isDeleting}
+            >
               إلغاء
             </Button>
-            <Button variant="destructive" onClick={handleDeleteStore}>
-              حذف نهائياً
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteStore}
+              disabled={isDeleting || deleteConfirmation !== selectedStore?.subdomain}
+              className="gap-2"
+            >
+              {isDeleting && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {isDeleting ? "جاري الحذف..." : "حذف نهائياً"}
             </Button>
           </DialogFooter>
         </DialogContent>

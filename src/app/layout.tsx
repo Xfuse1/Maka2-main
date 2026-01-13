@@ -58,7 +58,7 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://tpkfgimtgduiiiscdqyq.supabase.co" />
       </head>
-      <body className={`font-sans ${cairo.variable} antialiased text-foreground bg-background`}>
+      <body suppressHydrationWarning className={`font-sans ${cairo.variable} antialiased text-foreground bg-background`}>
         <WebVitals />
         <DesignProvider />
         <DesignSyncProvider>
