@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
+import { invalidateCategoryCache } from "@/lib/cache/categories-cache"
+import { revalidatePath } from "next/cache"
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -46,6 +48,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     if (error) throw error
 
+    // Invalidate cache after update
+    invalidateCategoryCache(storeId)
+    revalidatePath('/admin/categories')
+    revalidatePath('/')
+
     return NextResponse.json({ data })
   } catch (error) {
     console.error("[v0] Error updating category:", error)
@@ -61,6 +68,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   
   const { error } = await supabase
     .from("categories")
+  
+  // Invalidate cache after deletion
+  invalidateCategoryCache(storeId)
+  revalidatePath('/admin/categories')
+  revalidatePath('/')
+  
     .delete()
     .eq("id", id)
     .eq("store_id", storeId)

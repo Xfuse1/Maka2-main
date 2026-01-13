@@ -348,7 +348,9 @@ export async function deleteProductImage(id: string) {
 
 // Get all categories
 export async function getAllCategories() {
-  const response = await fetch("/api/admin/categories")
+  const response = await fetch("/api/admin/categories", {
+    cache: 'no-store' // Always fetch fresh data
+  })
   if (!response.ok) throw new Error("Failed to fetch categories")
   const { data } = await response.json()
   return data

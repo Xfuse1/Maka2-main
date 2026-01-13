@@ -3,9 +3,6 @@ import { createAdminClient, getStoreIdFromRequest } from "@/lib/supabase/admin"
 import { invalidateCategoryCache } from "@/lib/cache/categories-cache"
 import { revalidatePath } from "next/cache"
 
-// Enable revalidation
-export const revalidate = 3600 // 1 hour (categories rarely change)
-
 // GET - Fetch all categories (filtered by store_id)
 export async function GET() {
   const supabase = createAdminClient()
@@ -21,7 +18,7 @@ export async function GET() {
   
   return NextResponse.json({ data }, {
     headers: {
-      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     }
   })
 }
