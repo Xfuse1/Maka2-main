@@ -76,18 +76,34 @@ export default function StoreAuthPage() {
   }, [])
 
   // التحقق من أن المستخدم ينتمي للمتجر
+  // ملاحظة: جدول store_users قد لا يكون موجود، لذا نتحقق من user_metadata بدلاً
   const checkUserBelongsToStore = async (userId: string): Promise<boolean> => {
     if (!store?.id) return false
-    
-    const { data, error } = await supabase
-      .from("store_users")
-      .select("id")
-      .eq("store_id", store.id)
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .single()
-    
-    return !error && !!data
+
+    try {
+      // أولاً نحاول من store_users
+      const { data, error } = await supabase
+        .from("store_users")
+        .select("id")
+        .eq("store_id", store.id)
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .single()
+
+      if (!error && data) return true
+
+      // إذا فشل، نتحقق من user_metadata
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData?.user?.user_metadata?.store_id === store.id) {
+        return true
+      }
+
+      return false
+    } catch {
+      // في حالة أي خطأ، نسمح بالدخول ونتحقق من metadata
+      const { data: userData } = await supabase.auth.getUser()
+      return userData?.user?.user_metadata?.store_id === store.id
+    }
   }
 
   // تسجيل الدخول
@@ -196,91 +212,43 @@ export default function StoreAuthPage() {
     }
 
     try {
-      // التحقق من أن البريد غير مستخدم في هذا المتجر
-      const { data: existingUser } = await supabase
-        .from("store_users")
-        .select(`
-          id,
-          user_id,
-          profiles:user_id(email)
-        `)
-        .eq("store_id", store.id)
-        .single()
-
-      // بناء redirect URL بشكل صريح باستخدام subdomain المتجر
-      const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
-      const isProduction = process.env.NODE_ENV === "production"
-      const redirectUrl = isProduction
-        ? `https://${store.subdomain}.${platformDomain}/auth/callback`
-        : `http://${store.subdomain}.localhost:3000/auth/callback`
-
-      // إنشاء المستخدم مع metadata تحتوي على store_id
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone,
-            store_id: store.id,
-            store_subdomain: store.subdomain,
-            role: "customer",
-          },
-          emailRedirectTo: redirectUrl,
+      // استخدام API route لإنشاء الحساب مع service role
+      const response = await fetch("/api/auth/signup-with-store", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+          phone,
+          store_subdomain: store.subdomain,
+        }),
       })
 
-      if (error) {
-        if (error.message.includes("already registered")) {
-          setMessage({ 
-            type: "error", 
-            text: "هذا البريد مسجل بالفعل. جرب تسجيل الدخول أو استخدم بريد مختلف." 
+      const result = await response.json()
+
+      if (!response.ok) {
+        if (result.error?.includes("already registered")) {
+          setMessage({
+            type: "error",
+            text: "هذا البريد مسجل بالفعل. جرب تسجيل الدخول أو استخدم بريد مختلف."
+          })
+        } else if (result.error?.includes("another store")) {
+          setMessage({
+            type: "error",
+            text: "هذا البريد مسجل بالفعل في متجر آخر. يرجى استخدام بريد مختلف."
           })
         } else {
-          setMessage({ type: "error", text: error.message })
+          setMessage({ type: "error", text: result.error || "حدث خطأ في إنشاء الحساب" })
         }
         setIsSubmitting(false)
         return
       }
 
-      if (!data.user) {
-        setMessage({ type: "error", text: "حدث خطأ في إنشاء الحساب" })
-        setIsSubmitting(false)
-        return
-      }
-
-      // إضافة المستخدم لجدول store_users يدوياً (في حالة فشل الـ trigger)
-      const { error: storeUserError } = await supabase
-        .from("store_users")
-        .insert({
-          store_id: store.id,
-          user_id: data.user.id,
-          role: "customer",
-        } as any)
-
-      if (storeUserError && !storeUserError.message.includes("duplicate")) {
-        console.error("[StoreAuth] Error adding user to store:", storeUserError)
-      }
-
-      // تحديث الـ profile مع store_id
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: data.user.id,
-          email,
-          full_name: fullName,
-          phone,
-          store_id: store.id,
-          role: "customer",
-        } as any)
-
       // التحقق من نوع التأكيد
-      if (data.user.identities?.length === 0) {
-        setMessage({ 
-          type: "error", 
-          text: "هذا البريد مسجل بالفعل في متجر آخر. يرجى استخدام بريد مختلف." 
-        })
-      } else if (data.session) {
+      if (result.session) {
         // تسجيل دخول مباشر (التأكيد معطل)
         setMessage({ type: "success", text: "تم إنشاء الحساب بنجاح!" })
         setTimeout(() => {
@@ -289,9 +257,9 @@ export default function StoreAuthPage() {
         }, 1500)
       } else {
         // يحتاج تأكيد البريد
-        setMessage({ 
-          type: "success", 
-          text: "تم إنشاء الحساب! يرجى تأكيد بريدك الإلكتروني للمتابعة." 
+        setMessage({
+          type: "success",
+          text: "تم إنشاء الحساب! يرجى تأكيد بريدك الإلكتروني للمتابعة."
         })
       }
 

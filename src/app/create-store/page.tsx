@@ -243,6 +243,38 @@ function CreateStoreContent() {
           plan: result.plan,
         }))
         
+        // تسجيل دخول المستخدم تلقائياً
+        console.log("[Create Store] Attempting auto-login...")
+        
+        // قد يحتاج تأخير صغير حتى ينتهي Supabase من إنشاء المستخدم
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        let signInAttempts = 0
+        let signInSuccess = false
+        
+        while (signInAttempts < 3 && !signInSuccess) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: tempStoreData.email,
+            password: tempStoreData.password,
+          })
+
+          if (signInError) {
+            signInAttempts++
+            console.warn(`Auto-login attempt ${signInAttempts} failed:`, signInError)
+            if (signInAttempts < 3) {
+              // انتظر ثم حاول مرة أخرى
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+          } else if (signInData?.user) {
+            console.log("[Create Store] Auto-login successful!")
+            signInSuccess = true
+          }
+        }
+        
+        if (!signInSuccess) {
+          console.warn("[Create Store] Auto-login failed after 3 attempts, but continuing with payment")
+        }
+        
         // استدعاء API الدفع
         const paymentResponse = await fetch("/api/payment/subscription/initiate", {
           method: "POST",
@@ -250,19 +282,25 @@ function CreateStoreContent() {
           body: JSON.stringify({
             store_id: result.store.id,
             plan_id: selectedPlanId,
+            email: tempStoreData.email, // بيانات احتياطية
+            password: tempStoreData.password,
           }),
         })
 
         const paymentResult = await paymentResponse.json()
 
         if (!paymentResponse.ok) {
+          console.error("[Create Store] Payment API error:", paymentResult)
           setError(paymentResult.error || "فشل في إنشاء طلب الدفع")
           setIsLoading(false)
           return
         }
 
+        console.log("[Create Store] Payment URL received:", paymentResult.payment_url ? "✓" : "✗")
+
         // إعادة التوجيه لصفحة الدفع
         if (paymentResult.payment_url) {
+          console.log("[Create Store] Redirecting to Kashier...")
           window.location.href = paymentResult.payment_url
         } else {
           setError("لم نتمكن من الحصول على رابط الدفع")

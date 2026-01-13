@@ -108,8 +108,8 @@ export async function POST(request: NextRequest) {
         email: email,
         role: "store_owner",
         full_name: store_name + " Admin",
+        name: store_name + " Admin",
         store_id: null, // سيتم تحديثه لاحقاً
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
 
@@ -175,9 +175,7 @@ export async function POST(request: NextRequest) {
         email,
         phone: phone || null,
         description: description || null,
-        status: subscriptionStatus === "trial" ? "active" : "inactive", // المتجر نشط فقط للتجربة
-        subscription_status: subscriptionStatus,
-        trial_ends_at: trialEndsAt,
+        status: subscriptionStatus === "trial" ? "active" : "pending", // المتجر نشط فقط للتجربة، والباقي pending
         subscription_plan: selectedPlan?.name_en || "free", // للتوافق مع القديم
         commission_rate: 10.0, // عمولة 10%
         primary_color: "#3b82f6",
@@ -271,20 +269,25 @@ export async function POST(request: NextRequest) {
       console.log("[API] Profile updated successfully with store_id:", (newStore as any).id)
     }
 
-    // إنشاء سجل store_admins لربط المستخدم كمدير للمتجر
-    const { error: adminError } = await supabaseAdmin
-      .from("store_admins")
-      .insert({
-        store_id: (newStore as any).id,
-        user_id: userId,
-        email: email,
-        role: "owner",
-        is_active: true,
-      } as any)
+    // إنشاء سجل store_admins لربط المستخدم كمدير للمتجر (إذا كان الجدول موجوداً)
+    try {
+      const { error: adminError } = await supabaseAdmin
+        .from("store_admins")
+        .insert({
+          store_id: (newStore as any).id,
+          user_id: userId,
+          email: email,
+          role: "owner",
+          is_active: true,
+        } as any)
 
-    if (adminError) {
-      console.error("[API] Error creating store admin:", adminError)
-      // لا نفشل العملية بسبب هذا
+      if (adminError) {
+        console.warn("[API] Info on store admin:", adminError)
+        // لا نفشل العملية بسبب هذا
+      }
+    } catch (adminErr) {
+      // Table might not exist, that's okay
+      console.log("[API] store_admins table not available:", adminErr)
     }
 
     // إنشاء سجل الاشتراك إذا كانت هناك باقة
