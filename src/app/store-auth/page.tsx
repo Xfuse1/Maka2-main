@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Mail, Lock, User, Phone, LogIn, UserPlus, Store, AlertCircle, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 interface StoreData {
   id: string
@@ -26,7 +26,7 @@ export default function StoreAuthPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getSupabaseBrowserClient()
 
   // تحميل بيانات المتجر من الـ subdomain
   useEffect(() => {

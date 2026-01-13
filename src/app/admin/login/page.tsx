@@ -159,8 +159,6 @@ export default function AdminLoginPage() {
         throw new Error("فشل تسجيل الدخول")
       }
 
-      console.log("[Login] User authenticated:", authData.user.id)
-
       // Verify user has admin role (profiles or store_admins)
       let hasAccess = false
       let userStoreId: string | null = null
@@ -172,12 +170,9 @@ export default function AdminLoginPage() {
         .eq("id", authData.user.id)
         .maybeSingle() as { data: { role: string; store_id: string | null } | null; error: any }
 
-      console.log("[Login] Profile check:", { profile, storeId, subdomain })
-
       if (profile && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role)) {
         hasAccess = true
         userStoreId = profile.store_id
-        console.log("[Login] Access granted via profiles table:", { userStoreId })
       }
 
       // If not in profiles, check store_admins
@@ -189,17 +184,13 @@ export default function AdminLoginPage() {
           .eq("is_active", true)
           .maybeSingle() as { data: { role: string; store_id: string } | null; error: any }
 
-        console.log("[Login] Store_admins check:", { storeAdmin })
-
         if (storeAdmin) {
           hasAccess = true
           userStoreId = storeAdmin.store_id
-          console.log("[Login] Access granted via store_admins table:", { userStoreId })
         }
       }
 
       if (!hasAccess) {
-        console.error("[Login] No access - user has no admin role")
         await supabase.auth.signOut()
         throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
       }
@@ -207,35 +198,10 @@ export default function AdminLoginPage() {
       // CRITICAL: If on a subdomain, verify user owns THIS store
       // Check if userStoreId is set and matches current store
       if (storeId) {
-        console.log("[Login] Verifying store ownership:", { storeId, userStoreId, subdomain })
         if (!userStoreId || userStoreId !== storeId) {
-          console.error("[Login] Store ownership verification failed", { storeId, userStoreId })
           await supabase.auth.signOut()
           throw new Error("هذا الحساب لا يملك صلاحية الوصول لهذا المتجر")
         }
-        console.log("[Login] Store ownership verified!")
-      }
-
-      console.log("[Login] All checks passed, redirecting to /admin")
-
-      // Helper to log to both console and localStorage for debugging
-      const debugLog = (msg: string) => {
-        console.log(msg)
-        if (typeof window !== "undefined") {
-          const logs = JSON.parse(localStorage.getItem("login-debug-logs") || "[]") as string[]
-          logs.push(`${new Date().toISOString()}: ${msg}`)
-          localStorage.setItem("login-debug-logs", JSON.stringify(logs.slice(-20))) // Keep last 20 logs
-        }
-      }
-
-      // Wait a bit to ensure session is saved to cookies
-      debugLog("[Login] Checking session before redirect...")
-      const { data: { session } } = await supabase.auth.getSession()
-      debugLog(`[Login] Current session after auth: ${session?.user?.email}`)
-      
-      // Also check cookies directly
-      if (typeof window !== "undefined") {
-        debugLog(`[Login] Current cookies: ${document.cookie}`)
       }
 
       toast({
@@ -243,11 +209,7 @@ export default function AdminLoginPage() {
         description: storeName ? `مرحباً بك في لوحة تحكم ${storeName}` : "مرحباً بك في لوحة التحكم"
       })
 
-      debugLog("[Login] Redirecting to /admin...")
-      
-      // Use router.push instead of window.location for client-side navigation (no full page reload)
       router.push("/admin")
-
     } catch (error: any) {
       console.error("Login error:", error)
       toast({
