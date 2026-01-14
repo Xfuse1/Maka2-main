@@ -32,24 +32,47 @@ export default function AdminDashboard() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // Get user's store
-        const { data: store } = await supabase
-          .from("stores")
-          .select("id, subscription_status")
-          .eq("owner_id", user.id)
-          .single()
+        // Try to get store from store_admins (supports multiple stores)
+        const { data: storeAdmin } = await supabase
+          .from("store_admins")
+          .select("store_id")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .maybeSingle()
 
-        if (store) {
-          setStoreId(store.id)
+        let storeRecord = storeAdmin?.store_id
+
+        // Fallback: check profiles table
+        if (!storeRecord) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("store_id")
+            .eq("id", user.id)
+            .maybeSingle()
+          storeRecord = profile?.store_id
+        }
+
+        // Fallback: check stores by owner_id (legacy)
+        if (!storeRecord) {
+          const { data: store } = await supabase
+            .from("stores")
+            .select("id, subscription_status")
+            .eq("owner_id", user.id)
+            .maybeSingle()
+          storeRecord = store?.id
+        }
+
+        if (storeRecord) {
+          setStoreId(storeRecord)
           
           // Check subscription status
           const { data: subscription } = await supabase
             .from("subscriptions")
             .select("status")
-            .eq("store_id", store.id)
+            .eq("store_id", storeRecord)
             .order("created_at", { ascending: false })
             .limit(1)
-            .single()
+            .maybeSingle()
 
           if (subscription) {
             setSubscriptionStatus(subscription.status)

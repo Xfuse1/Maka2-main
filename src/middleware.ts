@@ -336,12 +336,38 @@ async function handleStoreAdminAuth(request: NextRequest, subdomain: string): Pr
       return redirectToLogin(request, "/admin/login")
     }
 
-    // 4. CRITICAL: Verify user belongs to this store
-    console.log(`[Middleware] Checking store ownership - user.store_id: ${profile.store_id}, store.id: ${store.id}`)
-    if (!profile.store_id || profile.store_id !== store.id) {
-      // User is logged in but doesn't own this store - redirect to login
+    // 4. CRITICAL: Verify user can access this store
+    // For multi-store support: check both store_admins and profiles
+    console.log(`[Middleware] Checking store access - user.store_id: ${profile.store_id}, store.id: ${store.id}`)
+    
+    let canAccessStore = false
+    
+    // Primary check: store_admins table (supports multiple stores)
+    const { data: storeAdmin, error: storeAdminError } = await supabase
+      .from("store_admins")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("store_id", store.id)
+      .eq("is_active", true)
+      .maybeSingle()
+
+    if (!storeAdminError || storeAdminError.code === "PGRST116") {
+      if (storeAdmin) {
+        canAccessStore = true
+        console.log(`[Middleware] ✓ User has store_admins access for store: ${store.id}`)
+      } else if (profile.store_id === store.id) {
+        // Fallback: Check profiles.store_id (legacy single-store)
+        canAccessStore = true
+        console.log(`[Middleware] ✓ User has profiles access for store: ${store.id}`)
+      }
+    } else {
+      console.error(`[Middleware] Error checking store_admins:`, storeAdminError)
+    }
+
+    if (!canAccessStore) {
+      // User is logged in but doesn't have access to this store - redirect to login
       // Sign them out first to clear session
-      console.log(`[Middleware] Store ownership check FAILED - signing out user`)
+      console.log(`[Middleware] Store access check FAILED - signing out user`)
       await supabase.auth.signOut()
       return redirectToLogin(request, "/admin/login")
     }
@@ -395,8 +421,29 @@ async function handleStoreAdminApiAuth(request: NextRequest, subdomain: string):
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // 4. CRITICAL: Verify user belongs to this store
-    if (!profile.store_id || profile.store_id !== store.id) {
+    // 4. CRITICAL: Verify user can access this store
+    // For multi-store support: check both store_admins and profiles
+    let canAccessStore = false
+    
+    // Primary check: store_admins table
+    const { data: storeAdmin, error: storeAdminError } = await supabase
+      .from("store_admins")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("store_id", store.id)
+      .eq("is_active", true)
+      .maybeSingle()
+
+    if (!storeAdminError || storeAdminError.code === "PGRST116") {
+      if (storeAdmin) {
+        canAccessStore = true
+      } else if (profile.store_id === store.id) {
+        // Fallback: check profiles
+        canAccessStore = true
+      }
+    }
+
+    if (!canAccessStore) {
       return NextResponse.json({ error: "Access denied to this store" }, { status: 403 })
     }
 
@@ -433,11 +480,13 @@ async function getUserProfile(
     .eq("id", userId)
     .maybeSingle()
 
-  if (profile) {
+  // If profiles has data with proper role, return it
+  if (profile && profile.role) {
     return profile
   }
 
   // Fallback to store_admins table
+  // Get ANY active store_admins entry for this user
   const { data: storeAdmin } = await supabase
     .from("store_admins")
     .select("role, store_id")

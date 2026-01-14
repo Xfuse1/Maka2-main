@@ -3,13 +3,13 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Home, Package, ShoppingBag, Settings, Palette, BarChart3, FileText, FolderTree, GalleryHorizontal, LogOut, X, Truck, Star, CreditCard } from "lucide-react"
+import { Home, Package, ShoppingBag, Settings, Palette, BarChart3, FileText, FolderTree, GalleryHorizontal, LogOut, X, Truck, Star, CreditCard, LogIn } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SiteLogo } from "@/components/site-logo"
 import { Button } from "@/components/ui/button"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSettingsStore } from "@/store/settings-store"
 
 const menuItems = [
@@ -96,10 +96,39 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
   const router = useRouter()
   const { toast } = useToast()
   const { settings, loadSettings } = useSettingsStore()
+  const [user, setUser] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        setUser(user)
+      } catch (error) {
+        console.error("Error checking user:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkUser()
+
+    // Subscribe to auth state changes
+    const supabase = getSupabaseBrowserClient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null)
+    })
+
+    return () => {
+      subscription?.unsubscribe()
+    }
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -183,14 +212,28 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
             <span className="text-sm">لوحة التحكم</span>
           </Link>
         </Button>
-        <Button
-          onClick={handleLogout}
-          variant="outline"
-          className="w-full flex items-center justify-center gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-        >
-          <LogOut className="h-4 w-4" />
-          <span className="text-sm">تسجيل الخروج</span>
-        </Button>
+
+        {/* Conditional auth button */}
+        {!isLoading && user ? (
+          // Logout button when user is logged in
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="w-full flex items-center justify-center gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="text-sm">تسجيل الخروج</span>
+          </Button>
+        ) : (
+          // Login button when user is not logged in
+          <Button asChild variant="outline" className="w-full flex items-center justify-center gap-2">
+            <Link href="/admin/login" onClick={() => onClose?.()}>
+              <LogIn className="h-4 w-4" />
+              <span className="text-sm">تسجيل الدخول</span>
+            </Link>
+          </Button>
+        )}
+
         <Link
           href="/"
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-muted hover:bg-muted/80 transition-all text-foreground font-medium"

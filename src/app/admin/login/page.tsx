@@ -70,12 +70,15 @@ export default function AdminLoginPage() {
 
       try {
         // Use API endpoint instead of direct DB query (safer)
-        const storeResponse = await fetch(`/api/stores/check?subdomain=${encodeURIComponent(subdomain)}`)
+        const storeResponse = await fetch(`/api/stores/check?subdomain=${encodeURIComponent(subdomain)}`, {
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        })
         
         if (!storeResponse.ok) {
+          console.warn("[LoadStore] Store not found for subdomain:", subdomain)
           toast({
-            title: "خطأ",
-            description: "المتجر غير موجود",
+            title: "⚠ تنبيه",
+            description: "المتجر غير موجود. تأكد من عنوان URL الصحيح",
             variant: "destructive",
           })
           setCheckingSession(false)
@@ -83,51 +86,79 @@ export default function AdminLoginPage() {
         }
 
         const { store } = await storeResponse.json()
+        if (!store?.id) {
+          throw new Error("بيانات المتجر غير صحيحة")
+        }
+        
         setStoreId(store.id)
         setStoreName(store.store_name)
 
         // Check if user is already logged in with correct store
         const supabase = getSupabaseBrowserClient()
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+        if (sessionError) {
+          console.error("[LoadStore] Session check error:", sessionError)
+          setCheckingSession(false)
+          return
+        }
 
         if (session?.user) {
-          // Verify user belongs to this store - check both tables
-          let userStoreId: string | null = null
+          // Verify user can access this store - check both store_admins and profiles
+          let canAccessStore = false
 
-          // Check profiles table first
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("store_id")
-            .eq("id", session.user.id)
-            .maybeSingle() as { data: { store_id: string | null } | null; error: any }
-
-          if (profile?.store_id) {
-            userStoreId = profile.store_id
-          } else {
-            // Fallback to store_admins
-            const { data: storeAdmin } = await supabase
+          try {
+            // Primary check: store_admins table (supports multiple stores)
+            const { data: storeAdmin, error: storeAdminError } = await supabase
               .from("store_admins")
               .select("store_id")
               .eq("user_id", session.user.id)
+              .eq("store_id", store.id)
               .eq("is_active", true)
               .maybeSingle() as { data: { store_id: string } | null; error: any }
 
-            if (storeAdmin?.store_id) {
-              userStoreId = storeAdmin.store_id
+            if (!storeAdminError || storeAdminError.code === "PGRST116") {
+              if (storeAdmin) {
+                canAccessStore = true
+                console.log("[LoadStore] User has store_admins access for:", store.id)
+              } else {
+                // Fallback: Check profiles table (legacy single-store)
+                const { data: profile } = await supabase
+                  .from("profiles")
+                  .select("store_id")
+                  .eq("id", session.user.id)
+                  .maybeSingle() as { data: { store_id: string | null } | null; error: any }
+
+                if (profile?.store_id === store.id) {
+                  canAccessStore = true
+                  console.log("[LoadStore] User has profile access for:", store.id)
+                }
+              }
             }
+          } catch (accessCheckError) {
+            console.error("[LoadStore] Access check error:", accessCheckError)
           }
 
           // If user owns this store, redirect to admin
-          if (userStoreId === store.id) {
+          if (canAccessStore) {
+            console.log("[LoadStore] Auto-redirecting user to admin dashboard")
             router.replace("/admin")
             return
-          } else if (userStoreId) {
-            // User owns a different store - sign out
+          } else if (session.user) {
+            // User doesn't have access to this store - sign out
+            console.log("[LoadStore] User logged in but no access to store, signing out")
             await supabase.auth.signOut()
           }
         }
       } catch (error) {
-        console.error("Session check error:", error)
+        console.error("[LoadStore] Error:", error)
+        if (error instanceof Error && error.name === "AbortError") {
+          toast({
+            title: "خطأ",
+            description: "انتهت مهلة الاتصال. تحقق من الإنترنت",
+            variant: "destructive",
+          })
+        }
       } finally {
         setCheckingSession(false)
       }
@@ -138,6 +169,17 @@ export default function AdminLoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate input
+    if (!email.trim() || !password) {
+      toast({
+        title: "خطأ في الإدخال",
+        description: "يرجى ملء جميع الحقول",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -150,13 +192,21 @@ export default function AdminLoginPage() {
       })
 
       if (authError) {
-        throw new Error(authError.message === "Invalid login credentials"
-          ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-          : authError.message)
+        // Handle specific auth errors
+        if (authError.message.includes("Invalid login credentials")) {
+          throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
+        }
+        if (authError.message.includes("Email not confirmed")) {
+          throw new Error("يرجى تأكيد بريدك الإلكتروني أولاً")
+        }
+        if (authError.message.includes("too many requests")) {
+          throw new Error("محاولات تسجيل دخول كثيرة. حاول مرة أخرى لاحقاً")
+        }
+        throw new Error(authError.message)
       }
 
-      if (!authData.user) {
-        throw new Error("فشل تسجيل الدخول")
+      if (!authData?.user?.id) {
+        throw new Error("فشل تسجيل الدخول. يرجى المحاولة مرة أخرى")
       }
 
       // Verify user has admin role (profiles or store_admins)
@@ -172,6 +222,7 @@ export default function AdminLoginPage() {
 
       if (profileError && profileError.code !== "PGRST116") {
         console.error("[Login] Profile check error:", profileError)
+        throw new Error("فشل التحقق من البيانات. يرجى المحاولة مرة أخرى")
       }
 
       console.log("[Login] Profile found:", { profile, hasProfile: !!profile, role: profile?.role, store_id: profile?.store_id })
@@ -201,6 +252,7 @@ export default function AdminLoginPage() {
 
         if (storeAdminError && storeAdminError.code !== "PGRST116") {
           console.error("[Login] Store admin check error:", storeAdminError)
+          throw new Error("فشل التحقق من الصلاحيات. يرجى المحاولة مرة أخرى")
         }
 
         console.log("[Login] Store admin found:", { storeAdmin, hasAccess: !!storeAdmin })
@@ -220,30 +272,67 @@ export default function AdminLoginPage() {
           storeId: storeId
         })
         await supabase.auth.signOut()
-        throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم. يرجى التواصل مع الدعم الفني.")
+        throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم. يرجى التواصل مع الدعم الفني")
       }
 
-      // CRITICAL: If on a subdomain, verify user owns THIS store
-      // Check if userStoreId is set and matches current store
+      // If on a subdomain, verify user can access THIS store
       if (storeId) {
-        if (!userStoreId || userStoreId !== storeId) {
-          console.warn("[Login] Store mismatch:", { userStoreId, currentStoreId: storeId })
+        let canAccessStore = false
+        
+        // Check if user is admin for this specific store in store_admins
+        const { data: storeAdmin, error: storeAdminCheckError } = await supabase
+          .from("store_admins")
+          .select("id")
+          .eq("user_id", authData.user.id)
+          .eq("store_id", storeId)
+          .eq("is_active", true)
+          .maybeSingle() as { data: { id: string } | null; error: any }
+
+        if (storeAdminCheckError && storeAdminCheckError.code !== "PGRST116") {
+          console.error("[Login] Store access check error:", storeAdminCheckError)
+          throw new Error("فشل التحقق من صلاحيات المتجر")
+        }
+
+        if (storeAdmin) {
+          canAccessStore = true
+          console.log("[Login] ✓ User has access via store_admins for store:", storeId)
+        } else if (userStoreId === storeId) {
+          // Fallback to profiles.store_id for legacy single-store support
+          canAccessStore = true
+          console.log("[Login] ✓ User has access via profiles.store_id for store:", storeId)
+        }
+
+        if (!canAccessStore) {
+          console.warn("[Login] Access denied - user not in store:", { 
+            userId: authData.user.id, 
+            attemptedStoreId: storeId,
+            userProfileStoreId: userStoreId
+          })
           await supabase.auth.signOut()
           throw new Error("هذا الحساب لا يملك صلاحية الوصول لهذا المتجر")
         }
+      } else {
+        // Not on a subdomain, but user has access - redirect to main admin
+        console.log("[Login] ✓ User logged in (no subdomain), using first store:", userStoreId)
       }
 
       toast({
-        title: "تم تسجيل الدخول بنجاح",
-        description: storeName ? `مرحباً بك في لوحة تحكم ${storeName}` : "مرحباً بك في لوحة التحكم"
+        title: "✓ تم تسجيل الدخول بنجاح",
+        description: storeName ? `مرحباً بك في ${storeName}` : "مرحباً بك",
       })
 
-      router.push("/admin")
+      // Use setTimeout to ensure toast is shown before redirect
+      setTimeout(() => {
+        router.push("/admin")
+      }, 300)
     } catch (error: any) {
-      console.error("Login error:", error)
+      console.error("[Login] Error:", error)
+      
+      const errorMessage = error?.message || "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى"
+      
       toast({
-        title: "خطأ في تسجيل الدخول",
-        description: error.message || "حدث خطأ غير متوقع",
+        title: "✗ خطأ في تسجيل الدخول",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -317,25 +406,38 @@ export default function AdminLoginPage() {
                   disabled={loading}
                   className="rounded-lg pr-10"
                   autoComplete="current-password"
+                  minLength={6}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={loading}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:opacity-50"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
             
-            <Button type="submit" className="w-full rounded-lg" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "تسجيل الدخول"}
+            <Button 
+              type="submit" 
+              className="w-full rounded-lg font-semibold" 
+              disabled={loading || !email || !password}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  جاري تسجيل الدخول...
+                </>
+              ) : (
+                "تسجيل الدخول"
+              )}
             </Button>
             
             <div className="mt-4 text-center text-sm">
               <span className="text-muted-foreground">ليس لديك حساب؟ </span>
-              <a href="/admin/signup" className="text-primary hover:underline">
-                إنشاء حساب مسؤول
+              <a href="/admin/signup" className="text-primary hover:underline font-medium">
+                إنشاء حساب
               </a>
             </div>
           </form>
