@@ -34,14 +34,14 @@ const menuItems = [
     icon: FileText,
   },
   {
-    title: "المنتجات",
-    href: "/admin/products",
-    icon: Package,
-  },
-  {
     title: "الفئات",
     href: "/admin/categories",
     icon: FolderTree,
+  },
+  {
+    title: "المنتجات",
+    href: "/admin/products",
+    icon: Package,
   },
   {
     title: "الطلبات",
