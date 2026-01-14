@@ -103,12 +103,92 @@ export async function POST(request: NextRequest) {
 
     console.log("[Payment API] Plan found:", { plan_id, plan_name: plan.name, price: plan.price })
 
+    // Handle FREE plans - activate directly without payment
     if (plan.price === 0) {
-      console.warn("[Payment API] Free plan - no payment needed")
-      return NextResponse.json(
-        { error: "Cannot initiate payment for free plan" },
-        { status: 400 }
-      )
+      console.log("[Payment API] Free plan - activating directly")
+
+      const now = new Date()
+      const endDate = new Date(now)
+      endDate.setDate(endDate.getDate() + plan.duration_days)
+
+      // Create or update subscription
+      const { data: existingSub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id")
+        .eq("store_id", store_id)
+        .eq("status", "pending")
+        .single()
+
+      if (existingSub) {
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            plan_id: plan.id,
+            status: "active",
+            amount: 0,
+            start_date: now.toISOString(),
+            end_date: endDate.toISOString(),
+            payment_method: "free",
+            updated_at: now.toISOString(),
+          })
+          .eq("id", existingSub.id)
+      } else {
+        await supabaseAdmin
+          .from("subscriptions")
+          .insert({
+            store_id,
+            plan_id: plan.id,
+            status: "active",
+            amount: 0,
+            start_date: now.toISOString(),
+            end_date: endDate.toISOString(),
+            payment_method: "free",
+          })
+      }
+
+      // Update store status to active with trial
+      await supabaseAdmin
+        .from("stores")
+        .update({
+          status: "active",
+          subscription_status: "trial",
+          subscription_plan: plan.name_en || "free",
+          trial_ends_at: endDate.toISOString(),
+          updated_at: now.toISOString(),
+        })
+        .eq("id", store_id)
+
+      console.log("[Payment API] Free plan activated:", {
+        store_id,
+        plan_name: plan.name,
+        end_date: endDate.toISOString(),
+      })
+
+      // Return success with redirect to admin panel
+      const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"
+      const isLocalhost = platformDomain === "localhost"
+      const protocol = isLocalhost ? "http" : "https"
+      const port = isLocalhost ? ":3000" : ""
+
+      // Get store subdomain
+      const { data: storeData } = await supabaseAdmin
+        .from("stores")
+        .select("subdomain")
+        .eq("id", store_id)
+        .single()
+
+      const adminUrl = storeData
+        ? `${protocol}://${storeData.subdomain}.${platformDomain}${port}/admin`
+        : `/admin`
+
+      return NextResponse.json({
+        success: true,
+        free_plan: true,
+        redirect_url: adminUrl,
+        plan_name: plan.name,
+        duration_days: plan.duration_days,
+        end_date: endDate.toISOString(),
+      })
     }
 
     // Generate unique order ID for this subscription payment

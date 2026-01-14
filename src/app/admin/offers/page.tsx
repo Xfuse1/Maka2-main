@@ -45,10 +45,14 @@ export default function AdminOffersPage() {
 
   const save = async () => {
     try {
-      // validate discount is at least 1
+      // validate discount is between 1 and 100
       const dv = Number(form.discount_value || 0)
       if (dv < 1) {
         toast({ title: 'قيمة غير صالحة', description: 'يجب أن تكون نسبة الخصم 1% أو أكثر.', variant: 'destructive' })
+        return
+      }
+      if (dv > 100) {
+        toast({ title: 'قيمة غير صالحة', description: 'نسبة الخصم يجب أن تكون أقل من أو تساوي 100%.', variant: 'destructive' })
         return
       }
 
@@ -149,9 +153,14 @@ export default function AdminOffersPage() {
               <Input
                 type="number"
                 min={1}
+                max={100}
                 value={form.discount_value === 0 ? "" : String(form.discount_value)}
                 onChange={(e) => setForm((s) => ({ ...s, discount_value: Number(e.target.value || 0) }))}
+                placeholder="1 - 100"
               />
+              {form.discount_value > 100 && (
+                <p className="text-red-500 text-sm mt-1">نسبة الخصم يجب أن تكون أقل من أو تساوي 100%</p>
+              )}
             </div>
 
             <div className="flex items-center justify-between">

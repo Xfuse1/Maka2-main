@@ -84,7 +84,7 @@ function PlansContent() {
     setSelectingPlan(planId)
 
     try {
-      // Initiate payment
+      // Initiate payment or activate free plan
       const paymentResponse = await fetch("/api/payment/subscription/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +102,14 @@ function PlansContent() {
         return
       }
 
-      // Redirect to payment
+      // Check if it's a free plan (activated directly)
+      if (paymentResult.free_plan && paymentResult.redirect_url) {
+        // Free plan activated! Redirect to admin
+        window.location.href = paymentResult.redirect_url
+        return
+      }
+
+      // Redirect to payment for paid plans
       if (paymentResult.payment_url) {
         window.location.href = paymentResult.payment_url
       } else {
