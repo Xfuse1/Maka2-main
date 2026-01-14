@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
+import { LandingHeader } from "@/components/landing-header"
 
 interface SubscriptionPlan {
   id: string
@@ -112,7 +113,7 @@ export default function LandingPage() {
 
   return (
     <>
-      <SiteHeader />
+      <LandingHeader />
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white" dir="rtl">
       {/* Hero Section */}
       <section className="py-20 md:py-32">
