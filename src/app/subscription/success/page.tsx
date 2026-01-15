@@ -4,9 +4,9 @@ import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { 
-  CheckCircle, 
-  Loader2, 
+import {
+  CheckCircle,
+  Loader2,
   ExternalLink,
   Store,
   PartyPopper
@@ -18,7 +18,7 @@ function SubscriptionSuccessContent() {
   const searchParams = useSearchParams()
   const storeId = searchParams.get("store_id")
   const orderId = searchParams.get("orderId")
-  
+
   const [isLoading, setIsLoading] = useState(true)
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "unknown">("unknown")
   const [store, setStore] = useState<{ store_name: string; subdomain: string } | null>(null)

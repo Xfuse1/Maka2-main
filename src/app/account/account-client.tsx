@@ -153,28 +153,28 @@ export function AccountClient({ user, profile }: AccountClientProps) {
       <div className="max-w-4xl mx-auto">
         <Tabs defaultValue="profile" className="w-full">
           <TabsList className="grid w-full grid-cols-4 gap-2 mb-8 bg-white/80 backdrop-blur-sm p-2 rounded-2xl shadow-lg border-0">
-            <TabsTrigger 
-              value="profile" 
+            <TabsTrigger
+              value="profile"
               className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-2 text-sm transition-all duration-300"
             >
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">الملف</span>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="stores"
               className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-2 text-sm transition-all duration-300"
             >
               <Store className="h-4 w-4" />
               <span className="hidden sm:inline">المتاجر</span>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="subscriptions"
               className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-2 text-sm transition-all duration-300"
             >
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">الاشتراكات</span>
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="settings"
               className="flex items-center gap-2 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white py-2 text-sm transition-all duration-300"
             >
@@ -204,11 +204,11 @@ export function AccountClient({ user, profile }: AccountClientProps) {
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       البريد الإلكتروني
                     </Label>
-                    <Input 
-                      id="email" 
-                      value={user.email} 
-                      disabled 
-                      className="bg-muted/50 border-0 rounded-xl h-12 text-muted-foreground" 
+                    <Input
+                      id="email"
+                      value={user.email}
+                      disabled
+                      className="bg-muted/50 border-0 rounded-xl h-12 text-muted-foreground"
                     />
                   </div>
                   <div className="space-y-3">
@@ -239,8 +239,8 @@ export function AccountClient({ user, profile }: AccountClientProps) {
                   </div>
                 </CardContent>
                 <CardFooter className="p-8 pt-0">
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={isLoading}
                     className="w-full rounded-xl py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
                   >
@@ -416,8 +416,8 @@ export function AccountClient({ user, profile }: AccountClientProps) {
                   <p className="text-sm text-muted-foreground mb-4">
                     سيتم تسجيل خروجك من حسابك على هذا الجهاز
                   </p>
-                  <Button 
-                    variant="destructive" 
+                  <Button
+                    variant="destructive"
                     onClick={handleLogout}
                     className="rounded-xl px-6 py-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
                   >

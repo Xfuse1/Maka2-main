@@ -1,17 +1,17 @@
 import { createClient } from "@/lib/supabase/client";
 
 export interface HeroSlide {
-    id: string;
-    title_ar: string;
-    title_en?: string | null;
-    subtitle_ar?: string | null;
-    subtitle_en?: string | null;
-    image_url: string;
-    link_url?: string | null;
-    display_order: number;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  title_ar: string;
+  title_en?: string | null;
+  subtitle_ar?: string | null;
+  subtitle_en?: string | null;
+  image_url: string;
+  link_url?: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 /**

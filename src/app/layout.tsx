@@ -8,6 +8,7 @@ import DesignProvider from "@/components/providers/design-provider"
 import { DesignSyncProvider } from "@/components/design/design-sync-provider"
 import { WebVitals } from "@/components/web-vitals"
 import { StoreInitializer } from "@/components/store-initializer"
+import { StoreProvider } from "@/lib/store-context"
 
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
@@ -61,10 +62,12 @@ export default async function RootLayout({
       <body suppressHydrationWarning className={`font-sans ${cairo.variable} antialiased text-foreground bg-background`}>
         <WebVitals />
         <DesignProvider />
-        <DesignSyncProvider>
-          <StoreInitializer settings={settings} />
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>{children}</Suspense>
-        </DesignSyncProvider>
+        <StoreProvider>
+          <DesignSyncProvider>
+            <StoreInitializer settings={settings} />
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>{children}</Suspense>
+          </DesignSyncProvider>
+        </StoreProvider>
       </body>
     </html>
   )

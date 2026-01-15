@@ -38,12 +38,12 @@ export function getSupabaseAdminClient() {
 /**
  * Get store_id from request headers (set by middleware)
  * Falls back to DEFAULT_STORE_ID if not in multi-tenant mode
- * 
+ *
  * Priority:
- * 1. x-user-store-id (from store_owner profile)
- * 2. x-store-id (from subdomain routing)
+ * 1. x-store-id (from subdomain routing - takes precedence for multi-tenant)
+ * 2. x-user-store-id (from store_owner profile - fallback)
  * 3. DEFAULT_STORE_ID (fallback)
- * 
+ *
  * NOTE: This function dynamically imports next/headers to avoid client-side issues
  */
 export async function getStoreIdFromRequest(): Promise<string> {
@@ -51,16 +51,16 @@ export async function getStoreIdFromRequest(): Promise<string> {
     // Dynamic import to avoid issues with client components
     const { headers } = await import("next/headers")
     const headersList = await headers()
-    
-    // First check if user is a store_owner (from middleware auth)
-    const userStoreId = headersList.get("x-user-store-id")
-    if (userStoreId) {
-      return userStoreId
-    }
-    
-    // Then check subdomain-based store_id
+
+    // First check subdomain-based store_id (takes precedence for multi-tenant)
     const storeId = headersList.get("x-store-id")
-    return storeId || DEFAULT_STORE_ID
+    if (storeId) {
+      return storeId
+    }
+
+    // Then check if user is a store_owner (fallback)
+    const userStoreId = headersList.get("x-user-store-id")
+    return userStoreId || DEFAULT_STORE_ID
   } catch {
     // headers() might fail if called outside request context or in client
     return DEFAULT_STORE_ID

@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
       console.error("Missing Supabase environment variables!")
       console.error("NEXT_PUBLIC_SUPABASE_URL:", !!process.env.NEXT_PUBLIC_SUPABASE_URL)
       console.error("SUPABASE_SERVICE_ROLE_KEY:", !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-      return NextResponse.json({ 
-        error: "Server configuration error. Missing Supabase credentials." 
+      return NextResponse.json({
+        error: "Server configuration error. Missing Supabase credentials."
       }, { status: 500 })
     }
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
           .select("id")
           .limit(1)
           .single()
-        
+
         storeId = fallbackStore?.id
       } else {
         storeId = newStore.id
@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
 
     if (!storeId) {
       console.error("[CREATE-ADMIN] No store_id available")
-      return NextResponse.json({ 
-        error: "No store available. Please create a store first." 
+      return NextResponse.json({
+        error: "No store available. Please create a store first."
       }, { status: 500 })
     }
 
@@ -118,9 +118,9 @@ export async function POST(request: NextRequest) {
     if (profileError) {
       console.error("[CREATE-ADMIN] Profile creation error:", profileError)
       // Don't fail - the user exists, they just need to create profile manually
-      return NextResponse.json({ 
-        success: true, 
-        warning: "تم إنشاء المستخدم ولكن فشل إنشاء الملف الشخصي: " + profileError.message 
+      return NextResponse.json({
+        success: true,
+        warning: "تم إنشاء المستخدم ولكن فشل إنشاء الملف الشخصي: " + profileError.message
       })
     }
 

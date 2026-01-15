@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { createClient, resetSupabaseClient } from "./supabase/client"
+import { getSupabaseBrowserClient, resetSupabaseClient } from "./supabase/client"
 
 // =============================================================================
 // TYPES
@@ -59,16 +59,16 @@ interface StoreContextValue {
   store: Store | null
   storeSettings: StoreSettings | null
   designSettings: DesignSettings | null
-  
+
   // حالة التحميل
   isLoading: boolean
   error: string | null
-  
+
   // دوال لإعادة تحميل البيانات
   reloadStore: () => Promise<void>
   reloadSettings: () => Promise<void>
   reloadDesign: () => Promise<void>
-  
+
   // دالة للحصول على store_id للاستخدام في queries
   getStoreId: () => string | null
 }
@@ -100,47 +100,45 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
     resetSupabaseClient()
   }, [])
 
-  const supabase = createClient()
+  const supabase = getSupabaseBrowserClient()
 
   // دالة لاستخراج subdomain من URL
   const getSubdomain = (): string | null => {
     if (typeof window === "undefined") return null
-    
+
     const hostname = window.location.hostname
     const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
-    
-    // التعامل مع localhost بشكل خاص
-    if (platformDomain === "localhost") {
-      // مثال: store1.localhost -> store1
-      if (hostname.endsWith(".localhost")) {
-        const subdomain = hostname.replace(".localhost", "")
-        if (subdomain && subdomain !== "www") {
-          return subdomain
-        }
+
+    // التعامل مع localhost بشكل خاص - يجب التحقق من .localhost أولاً
+    // مثال: food.localhost -> food
+    if (hostname.endsWith(".localhost")) {
+      const subdomain = hostname.replace(".localhost", "")
+      if (subdomain && subdomain !== "www") {
+        return subdomain
       }
       return null
     }
-    
+
     // في بيئة التطوير العادية (localhost بدون subdomain)
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return null
     }
-    
+
     // إزالة www.
     const cleanHost = hostname.replace(/^www\./, "")
-    
+
     // إذا لم ينتهي بالـ platform domain
     if (!cleanHost.endsWith(platformDomain)) {
       return null
     }
-    
+
     // استخراج subdomain
     const subdomain = cleanHost.replace(`.${platformDomain}`, "")
-    
+
     if (!subdomain || subdomain === platformDomain) {
       return null
     }
-    
+
     return subdomain
   }
 
@@ -152,7 +150,7 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
 
       // الحصول على subdomain
       const subdomain = getSubdomain()
-      
+
       // إذا لم يكن هناك subdomain، نستخدم المتجر الافتراضي
       if (!subdomain) {
         // تحميل المتجر الافتراضي (main subdomain)
@@ -187,7 +185,7 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
       }
 
       const storeData = data as any
-      
+
       // التحقق من حالة المتجر
       if (storeData.status !== "active") {
         setError(`المتجر غير نشط. الحالة: ${storeData.status}`)
@@ -242,7 +240,7 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
       }
 
       setDesignSettings(data)
-      
+
       // تطبيق الألوان على CSS Variables
       if (data) {
         applyDesignSettings(data)
@@ -261,7 +259,7 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
     root.style.setProperty("--secondary-color", design.secondary_color)
     root.style.setProperty("--background-color", design.background_color)
     root.style.setProperty("--text-color", design.text_color)
-    
+
     // تطبيق الخطوط
     root.style.setProperty("--font-heading", design.heading_font)
     root.style.setProperty("--font-body", design.body_font)
@@ -318,11 +316,11 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
 
 export function useStore() {
   const context = useContext(StoreContext)
-  
+
   if (context === undefined) {
     throw new Error("useStore must be used within a StoreProvider")
   }
-  
+
   return context
 }
 

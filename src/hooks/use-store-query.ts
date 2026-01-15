@@ -261,8 +261,8 @@ export function useStoreQuery() {
     }
 
     // Fetch variants separately (workaround for partitioned tables)
-    type CartItemRow = { id: string; variant_id: string | null; quantity: number; [key: string]: unknown }
-    type VariantRow = { id: string; [key: string]: unknown }
+    type CartItemRow = { id: string; variant_id: string | null; quantity: number;[key: string]: unknown }
+    type VariantRow = { id: string;[key: string]: unknown }
 
     const typedCartItems = cartItems as CartItemRow[]
     const variantIds = typedCartItems.map(item => item.variant_id).filter(Boolean) as string[]
@@ -320,10 +320,10 @@ export function useStoreQuery() {
  */
 export function getStoreIdFromUrl(): string | null {
   if (typeof window === "undefined") return null
-  
+
   const hostname = window.location.hostname
   const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
-  
+
   // Handle localhost with subdomain
   if (platformDomain === "localhost" || hostname.endsWith(".localhost")) {
     if (hostname.endsWith(".localhost")) {
@@ -334,23 +334,23 @@ export function getStoreIdFromUrl(): string | null {
     }
     return null
   }
-  
+
   // Production domain handling
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return null
   }
-  
+
   const cleanHost = hostname.replace(/^www\./, "")
-  
+
   if (!cleanHost.endsWith(platformDomain)) {
     return null
   }
-  
+
   const subdomain = cleanHost.replace(`.${platformDomain}`, "")
-  
+
   if (!subdomain || subdomain === platformDomain) {
     return null
   }
-  
+
   return subdomain
 }

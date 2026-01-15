@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const { id } = await params
     const supabase = createAdminClient()
     const storeId = await getStoreIdFromRequest()
-    
+
     const { data, error } = await supabase
       .from("categories")
       .select("*")
@@ -35,10 +35,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const supabase = createAdminClient()
     const storeId = await getStoreIdFromRequest()
     const body = await request.json()
-    
+
     // Prevent changing store_id
     delete body.store_id
-    
+
     const { data, error } = await (supabase.from("categories") as any)
       .update({ ...body, updated_at: new Date().toISOString() })
       .eq("id", id)
@@ -65,19 +65,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params
   const supabase = createAdminClient()
   const storeId = await getStoreIdFromRequest()
-  
+
   const { error } = await supabase
     .from("categories")
-  
+
   // Invalidate cache after deletion
   invalidateCategoryCache(storeId)
   revalidatePath('/admin/categories')
   revalidatePath('/')
-  
+
     .delete()
     .eq("id", id)
     .eq("store_id", storeId)
-    
+
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ success: true })
 }

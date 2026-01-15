@@ -30,12 +30,12 @@ import {
 } from "./actions"
 import { createClient } from "@/lib/supabase/client"
 
-function ProductSelector({ 
-  selectedProducts, 
-  onProductsChange 
-}: { 
+function ProductSelector({
+  selectedProducts,
+  onProductsChange
+}: {
   selectedProducts: string[]
-  onProductsChange: (products: string[]) => void 
+  onProductsChange: (products: string[]) => void
 }) {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,19 +83,17 @@ function ProductSelector({
         {products.map((product) => (
           <div
             key={product.id}
-            className={`flex items-center justify-between p-3 border-b cursor-pointer transition-colors ${
-              selectedProducts.includes(product.id)
+            className={`flex items-center justify-between p-3 border-b cursor-pointer transition-colors ${selectedProducts.includes(product.id)
                 ? "bg-primary/10 border-primary/20"
                 : "hover:bg-muted/50"
-            }`}
+              }`}
             onClick={() => toggleProduct(product.id)}
           >
             <div className="flex items-center gap-3">
-              <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                selectedProducts.includes(product.id) 
-                  ? "bg-primary border-primary" 
+              <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedProducts.includes(product.id)
+                  ? "bg-primary border-primary"
                   : "border-gray-300"
-              }`}>
+                }`}>
                 {selectedProducts.includes(product.id) && (
                   <div className="w-2 h-2 bg-background rounded-sm" />
                 )}
@@ -205,7 +203,7 @@ export default function HomepageSectionsPage() {
     const action = editingSection
       ? updateSection(editingSection.id, section)
       : createSection(section)
-    
+
     handleAction(action, () => {
       setIsDialogOpen(false)
       setEditingSection(null)

@@ -17,6 +17,7 @@ type Product = {
 
 type Category = {
   id: string
+  slug: string
   name_ar: string
   name_en: string
 }
@@ -79,7 +80,7 @@ export function HomepageClientWrapper({
             {categories.map((category) => (
               <a
                 key={category.id}
-                href={`/categories/${category.id}`}
+                href={`/category/${category.slug}`}
                 className="p-6 bg-white rounded-lg shadow hover:shadow-lg transition-shadow text-center"
               >
                 <h3 className="text-lg font-semibold">{category.name_ar}</h3>

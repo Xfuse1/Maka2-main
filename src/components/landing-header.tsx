@@ -10,57 +10,66 @@ import { Menu, X } from "lucide-react"
 import ProfileDropdown from "./profile-dropdown.client"
 
 export function LandingHeader() {
+  const supabase = getSupabaseBrowserClient()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     let isMounted = true
+    let lastEvent = ""
 
-    // Subscribe to auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Subscribe to auth state changes (most reliable)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return
+      
+      console.log("[LandingHeader] Auth state changed:", _event, !!session?.user)
+      
+      // Ignore INITIAL_SESSION false after SIGNED_IN (race condition fix)
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
+        console.log("[LandingHeader] Ignoring INITIAL_SESSION false after SIGNED_IN")
+        return
+      }
+      
+      lastEvent = _event
       
       if (session?.user) {
         setUser(session.user)
-        setIsLoading(false)
       } else {
         setUser(null)
-        setIsLoading(false)
       }
+      
+      setIsLoading(false)
     })
 
-    // Check current session
+    // Also check current session as fallback
     const checkCurrentSession = async () => {
+      // Small delay to let onAuthStateChange fire first
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      if (!isMounted) return
+      
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!isMounted) return
         
+        console.log("[LandingHeader] Session fallback check:", !!session?.user, session?.user?.id)
+        
         if (session?.user && !user) {
           setUser(session.user)
-          setIsLoading(false)
-        } else if (!session?.user) {
-          setIsLoading(false)
         }
       } catch (err) {
         console.error("[LandingHeader] Error checking session:", err)
-        setIsLoading(false)
       }
     }
-
-    const timeout = setTimeout(() => {
-      if (isMounted) setIsLoading(false)
-    }, 2000)
 
     checkCurrentSession()
 
     return () => {
       isMounted = false
-      clearTimeout(timeout)
       subscription?.unsubscribe()
     }
-  }, [supabase])
+  }, [user, supabase])
 
   return (
     <header className="border-b border-gray-200 bg-white/98 backdrop-blur-md supports-[backdrop-filter]:bg-white/95 sticky top-0 z-50 shadow-sm">

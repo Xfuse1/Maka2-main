@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Get store ID from request (subdomain)
     const storeId = await getStoreIdFromRequest(request)
-    
+
     if (!storeId) {
       return NextResponse.json(
         { success: false, error: "Store not found" },
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
 
       } catch (error: any) {
         console.error("[Payment API] Kashier error:", error)
-        
+
         if (isDev) {
           // Only fallback in dev if Kashier completely fails (e.g. missing config)
           const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
             message: "Kashier failed - using development fallback",
           })
         }
-        
+
         return NextResponse.json(
           {
             success: false,

@@ -183,137 +183,45 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      const supabase = getSupabaseBrowserClient()
-
-      // Sign in with email and password
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password
+      // Use API endpoint instead of direct Supabase auth
+      const response = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          storeId: storeId,
+        }),
       })
 
-      if (authError) {
-        // Handle specific auth errors
-        if (authError.message.includes("Invalid login credentials")) {
+      const result = await response.json()
+
+      if (!response.ok) {
+        const errorMessage = result.error || "فشل تسجيل الدخول"
+        
+        if (errorMessage.includes("Invalid credentials")) {
           throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة")
         }
-        if (authError.message.includes("Email not confirmed")) {
-          throw new Error("يرجى تأكيد بريدك الإلكتروني أولاً")
+        if (errorMessage.includes("not have access")) {
+          throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم")
         }
-        if (authError.message.includes("too many requests")) {
-          throw new Error("محاولات تسجيل دخول كثيرة. حاول مرة أخرى لاحقاً")
-        }
-        throw new Error(authError.message)
-      }
-
-      if (!authData?.user?.id) {
-        throw new Error("فشل تسجيل الدخول. يرجى المحاولة مرة أخرى")
-      }
-
-      // Verify user has admin role (profiles or store_admins)
-      let hasAccess = false
-      let userStoreId: string | null = null
-
-      // Check profiles table
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role, store_id")
-        .eq("id", authData.user.id)
-        .maybeSingle() as { data: { role: string; store_id: string | null } | null; error: any }
-
-      if (profileError && profileError.code !== "PGRST116") {
-        console.error("[Login] Profile check error:", profileError)
-        throw new Error("فشل التحقق من البيانات. يرجى المحاولة مرة أخرى")
-      }
-
-      console.log("[Login] Profile found:", { profile, hasProfile: !!profile, role: profile?.role, store_id: profile?.store_id })
-
-      // السماح بالدخول إذا:
-      // 1. لديه role admin/store_owner/owner/super_admin
-      // 2. أو لديه store_id (صاحب متجر)
-      if (profile) {
-        const isAdminRole = profile.role && ["admin", "store_owner", "owner", "super_admin"].includes(profile.role.toLowerCase())
-        const isStoreOwner = !!profile.store_id
-
-        if (isAdminRole || isStoreOwner) {
-          hasAccess = true
-          userStoreId = profile.store_id
-          console.log("[Login] ✓ User has admin access via profile", { isAdminRole, isStoreOwner })
-        }
-      }
-
-      // If not in profiles, check store_admins
-      if (!hasAccess) {
-        const { data: storeAdmin, error: storeAdminError } = await supabase
-          .from("store_admins")
-          .select("role, store_id")
-          .eq("user_id", authData.user.id)
-          .eq("is_active", true)
-          .maybeSingle() as { data: { role: string; store_id: string } | null; error: any }
-
-        if (storeAdminError && storeAdminError.code !== "PGRST116") {
-          console.error("[Login] Store admin check error:", storeAdminError)
-          throw new Error("فشل التحقق من الصلاحيات. يرجى المحاولة مرة أخرى")
-        }
-
-        console.log("[Login] Store admin found:", { storeAdmin, hasAccess: !!storeAdmin })
-
-        if (storeAdmin) {
-          hasAccess = true
-          userStoreId = storeAdmin.store_id
-          console.log("[Login] ✓ User has admin access via store_admins")
-        }
-      }
-
-      if (!hasAccess) {
-        console.warn("[Login] ✗ User has NO admin access", {
-          userId: authData.user.id,
-          profileRole: profile?.role,
-          profileStoreId: profile?.store_id,
-          storeId: storeId
-        })
-        await supabase.auth.signOut()
-        throw new Error("ليس لديك صلاحيات الوصول للوحة التحكم. يرجى التواصل مع الدعم الفني")
-      }
-
-      // If on a subdomain, verify user can access THIS store
-      if (storeId) {
-        let canAccessStore = false
         
-        // Check if user is admin for this specific store in store_admins
-        const { data: storeAdmin, error: storeAdminCheckError } = await supabase
-          .from("store_admins")
-          .select("id")
-          .eq("user_id", authData.user.id)
-          .eq("store_id", storeId)
-          .eq("is_active", true)
-          .maybeSingle() as { data: { id: string } | null; error: any }
+        throw new Error(errorMessage)
+      }
 
-        if (storeAdminCheckError && storeAdminCheckError.code !== "PGRST116") {
-          console.error("[Login] Store access check error:", storeAdminCheckError)
-          throw new Error("فشل التحقق من صلاحيات المتجر")
-        }
+      // If successful, sign in the user on the client side to set the session
+      const supabase = getSupabaseBrowserClient()
+      
+      // The server already authenticated the user, now we just need to set up the client session
+      // We can do this by signing in again with the credentials (already verified on server)
+      const { error: clientAuthError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      })
 
-        if (storeAdmin) {
-          canAccessStore = true
-          console.log("[Login] ✓ User has access via store_admins for store:", storeId)
-        } else if (userStoreId === storeId) {
-          // Fallback to profiles.store_id for legacy single-store support
-          canAccessStore = true
-          console.log("[Login] ✓ User has access via profiles.store_id for store:", storeId)
-        }
-
-        if (!canAccessStore) {
-          console.warn("[Login] Access denied - user not in store:", { 
-            userId: authData.user.id, 
-            attemptedStoreId: storeId,
-            userProfileStoreId: userStoreId
-          })
-          await supabase.auth.signOut()
-          throw new Error("هذا الحساب لا يملك صلاحية الوصول لهذا المتجر")
-        }
-      } else {
-        // Not on a subdomain, but user has access - redirect to main admin
-        console.log("[Login] ✓ User logged in (no subdomain), using first store:", userStoreId)
+      if (clientAuthError) {
+        console.error("[Login] Client auth error:", clientAuthError)
+        throw new Error("فشل في إعداد الجلسة")
       }
 
       toast({

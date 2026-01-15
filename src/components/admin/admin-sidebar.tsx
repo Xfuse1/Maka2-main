@@ -96,6 +96,10 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
   const router = useRouter()
   const { toast } = useToast()
   const { settings, loadSettings } = useSettingsStore()
+  const supabase = getSupabaseBrowserClient()
+  
+  // Don't initialize from localStorage - it might not be synced yet
+  // Wait for Supabase to tell us the truth
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -103,32 +107,55 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
     loadSettings()
   }, [loadSettings])
 
-  // Check if user is logged in
+  // Check if user is logged in - ONLY use Supabase, not localStorage
   useEffect(() => {
+    let isMounted = true
+    let lastEvent = ""
+
+    // Subscribe to auth state changes (more reliable than getSession)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return
+      console.log("[AdminSidebar] Auth state changed:", _event, !!session?.user, session?.user?.id)
+      
+      // Ignore INITIAL_SESSION false events after we've already signed in
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
+        console.log("[AdminSidebar] Ignoring INITIAL_SESSION false after SIGNED_IN, keeping user logged in")
+        return
+      }
+      
+      lastEvent = _event
+      setUser(session?.user || null)
+      setIsLoading(false)
+    })
+
+    // Also try getSession for cases where onAuthStateChange might be delayed
     const checkUser = async () => {
+      // Small delay to let onAuthStateChange fire first
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      if (!isMounted) return
+      
       try {
-        const supabase = getSupabaseBrowserClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        setUser(user)
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!isMounted) return
+        
+        console.log("[AdminSidebar] Session fallback check:", !!session?.user, session?.user?.id)
+        if (session?.user && !user) {
+          setUser(session.user)
+          setIsLoading(false)
+        }
       } catch (error) {
-        console.error("Error checking user:", error)
-      } finally {
-        setIsLoading(false)
+        console.error("[AdminSidebar] Error getting session:", error)
       }
     }
 
     checkUser()
 
-    // Subscribe to auth state changes
-    const supabase = getSupabaseBrowserClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
-    })
-
     return () => {
+      isMounted = false
       subscription?.unsubscribe()
     }
-  }, [])
+  }, [user, supabase])
 
   const handleLogout = async () => {
     try {
@@ -214,7 +241,13 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
         </Button>
 
         {/* Conditional auth button */}
-        {!isLoading && user ? (
+        {isLoading ? (
+          // Loading state
+          <Button variant="outline" className="w-full flex items-center justify-center gap-2" disabled>
+            <div className="h-4 w-4 rounded-full border-2 border-muted-foreground border-t-foreground animate-spin" />
+            <span className="text-sm">جاري التحقق...</span>
+          </Button>
+        ) : user ? (
           // Logout button when user is logged in
           <Button
             onClick={handleLogout}

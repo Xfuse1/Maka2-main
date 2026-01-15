@@ -10,7 +10,7 @@ const STATIC_FILE_REGEX = /\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|web
 
 const PUBLIC_PATHS = new Set([
   "/admin/login",
-  "/admin/signup", 
+  "/admin/signup",
   "/landing",
   "/checkout/subscription",
   "/subscription/success",
@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
   // 2. Handle subdomain routing for multi-tenant
   if (ENABLE_MULTI_TENANT) {
     const subdomain = extractSubdomain(hostname)
-    
+
     if (subdomain) {
       // Admin routes from subdomains - need store ownership verification
       if (pathname.startsWith("/admin")) {
@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
       // Store pages - handle subdomain
       return handleStoreSubdomain(request, subdomain)
     }
-    
+
     // Main domain root -> landing page
     if (pathname === "/" || pathname === "") {
       return NextResponse.rewrite(new URL("/landing", request.url))
@@ -132,24 +132,24 @@ function shouldSkipMiddleware(pathname: string): boolean {
 
 function extractSubdomain(hostname: string): string | null {
   const hostWithoutPort = hostname.split(":")[0]
-  
+
   // localhost subdomain (e.g., store1.localhost)
   if (hostWithoutPort.endsWith(".localhost")) {
     const subdomain = hostWithoutPort.replace(".localhost", "")
     return subdomain && subdomain !== "www" ? subdomain : null
   }
-  
+
   // Skip plain localhost
   if (hostWithoutPort === "localhost" || hostWithoutPort === "127.0.0.1") {
     return null
   }
-  
+
   // Production domain subdomain
   const cleanHost = hostWithoutPort.replace(/^www\./, "")
   if (!cleanHost.endsWith(PLATFORM_DOMAIN)) {
     return null
   }
-  
+
   const subdomain = cleanHost.replace(`.${PLATFORM_DOMAIN}`, "")
   return subdomain && subdomain !== PLATFORM_DOMAIN ? subdomain : null
 }
@@ -215,7 +215,7 @@ async function handleAdminAuth(request: NextRequest): Promise<NextResponse> {
 
     // Get user profile/role
     const profile = await getUserProfile(supabase, user.id)
-    
+
     if (!profile || !ALLOWED_ROLES.includes(profile.role)) {
       return redirectToLogin(request, "/admin/login")
     }
@@ -254,7 +254,7 @@ async function handleAdminApiAuth(request: NextRequest): Promise<NextResponse> {
     if (profile.store_id) {
       response.headers.set("x-user-store-id", profile.store_id)
     }
-    
+
     return response
   } catch (error) {
     console.error("[middleware] Admin API auth error:", error)
@@ -301,7 +301,7 @@ async function handleStoreAdminAuth(request: NextRequest, subdomain: string): Pr
 
   try {
     console.log(`[Middleware] handleStoreAdminAuth - subdomain: ${subdomain}`)
-    
+
     // 1. First lookup the store by subdomain
     const { data: store, error: storeError } = await supabase
       .from("stores")
@@ -339,9 +339,9 @@ async function handleStoreAdminAuth(request: NextRequest, subdomain: string): Pr
     // 4. CRITICAL: Verify user can access this store
     // For multi-store support: check both store_admins and profiles
     console.log(`[Middleware] Checking store access - user.store_id: ${profile.store_id}, store.id: ${store.id}`)
-    
+
     let canAccessStore = false
-    
+
     // Primary check: store_admins table (supports multiple stores)
     const { data: storeAdmin, error: storeAdminError } = await supabase
       .from("store_admins")
@@ -424,7 +424,7 @@ async function handleStoreAdminApiAuth(request: NextRequest, subdomain: string):
     // 4. CRITICAL: Verify user can access this store
     // For multi-store support: check both store_admins and profiles
     let canAccessStore = false
-    
+
     // Primary check: store_admins table
     const { data: storeAdmin, error: storeAdminError } = await supabase
       .from("store_admins")
@@ -532,7 +532,7 @@ async function handleStoreSubdomainApi(
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: () => {},
+        setAll: () => { },
       },
     }
   )
@@ -582,7 +582,7 @@ async function handleStoreSubdomain(
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: () => {},
+        setAll: () => { },
       },
     }
   )

@@ -14,11 +14,11 @@ import ProfileDropdown from "./profile-dropdown.client"
 import { useSettingsStore } from "@/store/settings-store"
 
 export function SiteHeader() {
+  const supabase = getSupabaseBrowserClient()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { settings, loadSettings } = useSettingsStore()
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     loadSettings()
@@ -26,17 +26,25 @@ export function SiteHeader() {
 
   useEffect(() => {
     let isMounted = true
+    let lastEvent = ""
 
-    // Subscribe to auth state first (this works even if session is not yet loaded)
+    // Subscribe to auth state changes (most reliable)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!isMounted) return
       
       console.log("[Header] Auth state changed:", _event, !!session?.user)
       
+      // Ignore INITIAL_SESSION false after SIGNED_IN (race condition fix)
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
+        console.log("[Header] Ignoring INITIAL_SESSION false after SIGNED_IN")
+        return
+      }
+      
+      lastEvent = _event
+      
       if (session?.user) {
         console.log("[Header] Setting user on auth change:", session.user.id)
         setUser(session.user)
-        setIsLoading(false) // ✅ Stop loading immediately when user is found
         
         // Load profile
         try {
@@ -57,20 +65,25 @@ export function SiteHeader() {
         console.log("[Header] No user session found")
         setUser(null)
         setProfile(null)
-        setIsLoading(false) // ✅ Stop loading when no user
       }
+      
+      setIsLoading(false)
     })
 
-    // Also try to get current session immediately
+    // Also check current session as fallback
     const checkCurrentSession = async () => {
+      // Small delay to let onAuthStateChange fire first
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      if (!isMounted) return
+      
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!isMounted) return
         
-        console.log("[Header] Checking current session immediately:", !!session?.user)
+        console.log("[Header] Session fallback check:", !!session?.user, session?.user?.id)
         
         if (session?.user && !user) {
-          console.log("[Header] Current session found:", session.user.id)
           setUser(session.user)
           
           // Load profile
@@ -88,35 +101,19 @@ export function SiteHeader() {
           } catch (err) {
             console.error("[Header] Profile load error:", err)
           }
-          
-          setIsLoading(false)
-        } else if (!session?.user) {
-          // No session, stop loading
-          console.log("[Header] No session, setting isLoading to false")
-          setIsLoading(false)
         }
       } catch (err) {
         console.error("[Header] Error checking current session:", err)
-        setIsLoading(false)
       }
     }
-
-    // Set a timeout to ensure loading stops even if session check takes time
-    const timeout = setTimeout(() => {
-      if (isMounted) {
-        console.log("[Header] Loading timeout reached, setting isLoading to false")
-        setIsLoading(false)
-      }
-    }, 2000)
 
     checkCurrentSession()
 
     return () => {
       isMounted = false
-      clearTimeout(timeout)
       subscription?.unsubscribe()
     }
-  }, [supabase])
+  }, [user, supabase])
 
   return (
     <header className="border-b border-border bg-background sticky top-0 z-50 shadow-sm">

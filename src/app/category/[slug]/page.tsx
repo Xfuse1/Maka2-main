@@ -11,10 +11,12 @@ import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { useStore } from "@/lib/store-context"
 
 export default function CategoryPage() {
   const params = useParams()
   const slug = decodeURIComponent(params.slug as string)
+  const { store, isLoading: storeLoading } = useStore()
   const [searchQuery] = useState("")
   const [products, setProducts] = useState<any[]>([])
   const [categoryData, setCategoryData] = useState<any>(null)
@@ -24,6 +26,13 @@ export default function CategoryPage() {
 
   useEffect(() => {
     async function fetchProducts() {
+      // Wait for store to be loaded
+      if (storeLoading || !store?.id) {
+        return
+      }
+
+      const storeId = store.id
+
       try {
         setLoading(true)
         setCategoryNotFound(false)
@@ -32,6 +41,7 @@ export default function CategoryPage() {
           .from("categories")
           .select("*")
           .eq("is_active", true)
+          .eq("store_id", storeId)
 
         if (allCategories) {
           setAvailableCategories(allCategories)
@@ -43,7 +53,7 @@ export default function CategoryPage() {
 
         let foundCategory = null
 
-        const slugResult = await supabase.from("categories").select("*").eq("slug", slug).eq("is_active", true).single()
+        const slugResult = await supabase.from("categories").select("*").eq("slug", slug).eq("is_active", true).eq("store_id", storeId).single()
 
         if (!slugResult.error && slugResult.data) {
           foundCategory = slugResult.data
@@ -55,6 +65,7 @@ export default function CategoryPage() {
             .select("*")
             .eq("name_ar", slug)
             .eq("is_active", true)
+            .eq("store_id", storeId)
             .single()
 
           if (!nameResult.error && nameResult.data) {
@@ -68,6 +79,7 @@ export default function CategoryPage() {
             .select("*")
             .eq("name_en", slug)
             .eq("is_active", true)
+            .eq("store_id", storeId)
             .single()
 
           if (!enNameResult.error && enNameResult.data) {
@@ -76,7 +88,7 @@ export default function CategoryPage() {
         }
 
         if (!foundCategory) {
-          const result = await supabase.from("categories").select("*").eq("is_active", true)
+          const result = await supabase.from("categories").select("*").eq("is_active", true).eq("store_id", storeId)
 
           if (result.data && result.data.length > 0) {
             const searchTerm = slug.toLowerCase()
@@ -100,32 +112,46 @@ export default function CategoryPage() {
 
         setCategoryData(foundCategory)
 
+        // Fetch products without nested relations
         const { data: productsData, error: productsError } = await supabase
           .from("products")
-          .select(`
-            *,
-            product_images (image_url, alt_text_ar, alt_text_en, is_primary, display_order),
-            categories (id, name_ar, name_en, slug)
-          `)
+          .select("*")
           .eq("category_id", foundCategory.id)
           .eq("is_active", true)
+          .eq("store_id", storeId)
           .order("created_at", { ascending: false })
 
         if (productsError) {
           console.error("[v0] ❌ خطأ في جلب المنتجات:", productsError)
           setProducts([])
           setCategoryNotFound(true)
-        } else {
-          const processedProducts = (productsData || []).map((product) => ({
-            ...product,
-            product_images: (product.product_images || []).sort((a: any, b: any) => {
-              if (a.is_primary && !b.is_primary) return -1
-              if (!a.is_primary && b.is_primary) return 1
-              return (a.display_order || 0) - (b.display_order || 0)
-            }),
-          }))
+        } else if (productsData && productsData.length > 0) {
+          // Fetch images separately (workaround for partitioned tables)
+          const productIds = productsData.map((p: any) => p.id)
+          const { data: images } = await supabase
+            .from("product_images")
+            .select("product_id, image_url, alt_text_ar, alt_text_en, is_primary, display_order")
+            .in("product_id", productIds)
+            .order("display_order", { ascending: true })
+
+          // Attach images to products and sort them
+          const processedProducts = productsData.map((product: any) => {
+            const productImages = (images || [])
+              .filter((img: any) => img.product_id === product.id)
+              .sort((a: any, b: any) => {
+                if (a.is_primary && !b.is_primary) return -1
+                if (!a.is_primary && b.is_primary) return 1
+                return (a.display_order || 0) - (b.display_order || 0)
+              })
+            return {
+              ...product,
+              product_images: productImages,
+            }
+          })
 
           setProducts(processedProducts)
+        } else {
+          setProducts([])
         }
       } catch (error) {
         console.error("[v0] ❌ خطأ غير متوقع:", error)
@@ -138,7 +164,7 @@ export default function CategoryPage() {
     }
 
     fetchProducts()
-  }, [slug])
+  }, [slug, store?.id, storeLoading])
 
   const filteredProducts = searchQuery
     ? products.filter(
@@ -150,7 +176,7 @@ export default function CategoryPage() {
 
   const categoryName = categoryData?.name_ar || "المنتجات"
 
-  if (loading) {
+  if (loading || storeLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
