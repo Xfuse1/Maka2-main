@@ -9,7 +9,7 @@ import { SiteLogo } from "@/components/site-logo"
 import { Button } from "@/components/ui/button"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useSettingsStore } from "@/store/settings-store"
 
 const menuItems = [
@@ -102,6 +102,7 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
   // Wait for Supabase to tell us the truth
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const lastEventRef = useRef<string>("")
 
   useEffect(() => {
     loadSettings()
@@ -110,20 +111,19 @@ function SidebarContent({ onLinkClick, onClose, storeName }: { onLinkClick?: () 
   // Check if user is logged in - ONLY use Supabase, not localStorage
   useEffect(() => {
     let isMounted = true
-    let lastEvent = ""
 
     // Subscribe to auth state changes (more reliable than getSession)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return
-      console.log("[AdminSidebar] Auth state changed:", _event, !!session?.user, session?.user?.id)
+      console.log("[AdminSidebar] Auth state changed:", _event, !!session?.user, session?.user?.id, "lastEvent:", lastEventRef.current)
       
       // Ignore INITIAL_SESSION false events after we've already signed in
-      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEventRef.current === "SIGNED_IN") {
         console.log("[AdminSidebar] Ignoring INITIAL_SESSION false after SIGNED_IN, keeping user logged in")
         return
       }
       
-      lastEvent = _event
+      lastEventRef.current = _event
       setUser(session?.user || null)
       setIsLoading(false)
     })

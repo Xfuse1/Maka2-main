@@ -193,61 +193,28 @@ export async function POST(request: NextRequest) {
 
     // Generate unique order ID for this subscription payment
     const orderId = `SUB-${store_id.slice(0, 8)}-${Date.now()}`
-    console.log("[Payment API] Generated orderId:", orderId)
 
-    // Get Kashier config from environment (platform-level payment for subscriptions)
-    const merchantId = process.env.KASHIER_MERCHANT_ID
-    const apiKey = process.env.KASHIER_API_KEY
-    const mode = process.env.KASHIER_MODE === "test" ? "test" : "live"
-    const baseUrl = "https://checkout.kashier.io"
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.NEXT_PUBLIC_PLATFORM_DOMAIN}`
-
-    console.log("[Payment API] Kashier config:", { mode, appUrl, has_merchantId: !!merchantId })
-
-    if (!merchantId || !apiKey) {
-      console.error("[Payment API] Kashier configuration missing")
-      console.error("[Payment API] merchantId:", merchantId ? "***" : "missing", "apiKey:", apiKey ? "***" : "missing")
-      return NextResponse.json(
-        { error: "Payment configuration error" },
-        { status: 500 }
-      )
+    // Determine dynamic appUrl for correct redirection
+    const origin = request.headers.get("origin") || "";
+    let appUrl = origin;
+    if (!appUrl) {
+      const host = request.headers.get("host") || "";
+      const protocol = host.includes("localhost") ? "http" : "https";
+      appUrl = `${protocol}://${host}`;
     }
 
-    const amount = plan.price
-    const formattedAmount = Number(amount).toFixed(2)
-    const currency = "EGP"
+    // Use centralized payment service for consistent key strategy and security
+    const { paymentService } = await import("@/services/payment/payment-service")
+    const result = await paymentService.initiateKashierPayment({
+      orderId,
+      amount: plan.price,
+      customerEmail: store.email || "",
+      customerName: store.store_name || "Store Owner",
+      currency: "EGP",
+      extraRedirectParams: { store_id }
+    }, undefined, appUrl)
 
-    // Generate hash for Kashier
-    const path = `/?payment=${merchantId}.${orderId}.${formattedAmount}.${currency}`
-    const hash = crypto
-      .createHmac("sha256", apiKey)
-      .update(path)
-      .digest("hex")
-
-    // Build URLs
-    const successUrl = encodeURIComponent(
-      `${appUrl}/subscription/success?orderId=${orderId}&store_id=${store_id}`
-    )
-    const failureUrl = encodeURIComponent(
-      `${appUrl}/subscription/cancel?orderId=${orderId}&store_id=${store_id}`
-    )
-    const webhookUrl = encodeURIComponent(
-      `${appUrl}/api/payment/subscription/webhook`
-    )
-
-    // Build payment URL
-    const paymentUrl =
-      `${baseUrl}/?merchantId=${merchantId}` +
-      `&orderId=${orderId}` +
-      `&mode=${mode}` +
-      `&amount=${formattedAmount}` +
-      `&currency=${currency}` +
-      `&hash=${hash}` +
-      `&merchantRedirect=${successUrl}` +
-      `&failureRedirect=${failureUrl}` +
-      `&serverWebhook=${webhookUrl}` +
-      `&display=ar` +
-      `&allowedMethods=card,wallet`
+    const paymentUrl = result.paymentUrl
 
     // Store pending subscription payment info
     // First check if subscription exists

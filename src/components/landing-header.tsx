@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { Button } from "./ui/button"
 import { SiteLogo } from "./site-logo"
@@ -14,32 +14,32 @@ export function LandingHeader() {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const lastEventRef = useRef<string>("")
 
   useEffect(() => {
     let isMounted = true
-    let lastEvent = ""
 
     // Subscribe to auth state changes (most reliable)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return
       
-      console.log("[LandingHeader] Auth state changed:", _event, !!session?.user)
+      console.log("[LandingHeader] Auth state changed:", _event, !!session?.user, "lastEvent:", lastEventRef.current)
       
       // Ignore INITIAL_SESSION false after SIGNED_IN (race condition fix)
-      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
-        console.log("[LandingHeader] Ignoring INITIAL_SESSION false after SIGNED_IN")
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEventRef.current === "SIGNED_IN") {
+        console.log("[LandingHeader] Ignoring INITIAL_SESSION false after SIGNED_IN, keeping previous user state")
         return
       }
       
-      lastEvent = _event
+      lastEventRef.current = _event
       
       if (session?.user) {
         setUser(session.user)
+        setIsLoading(false)
       } else {
         setUser(null)
+        setIsLoading(false)
       }
-      
-      setIsLoading(false)
     })
 
     // Also check current session as fallback
@@ -57,6 +57,7 @@ export function LandingHeader() {
         
         if (session?.user && !user) {
           setUser(session.user)
+          setIsLoading(false)
         }
       } catch (err) {
         console.error("[LandingHeader] Error checking session:", err)

@@ -63,16 +63,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Decrypt sensitive fields
-    const decryptedData = {
+    // Return data - no decryption needed since we're not encrypting anymore
+    const returnData = {
       kashier_merchant_id: data?.kashier_merchant_id || "",
-      kashier_api_key: data?.kashier_api_key ? decrypt(data.kashier_api_key) : "",
+      kashier_api_key: data?.kashier_api_key || "",
       kashier_test_mode: data?.kashier_test_mode ?? true,
-      kashier_webhook_secret: data?.kashier_webhook_secret ? decrypt(data.kashier_webhook_secret) : "",
+      kashier_webhook_secret: data?.kashier_webhook_secret || "",
       kashier_enabled: data?.kashier_enabled ?? false,
     };
 
-    return NextResponse.json(decryptedData);
+    return NextResponse.json(returnData);
   } catch (error) {
     console.error("Error in GET /api/admin/payment-settings:", error);
     return NextResponse.json(
@@ -107,12 +107,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Encrypt sensitive fields
-    const encryptedData: any = {
+    // Store data WITHOUT encryption for now
+    // TODO: Re-enable encryption with consistent ENCRYPTION_KEY
+    const storeData: any = {
       kashier_merchant_id: body.kashier_merchant_id,
-      kashier_api_key: body.kashier_api_key ? encrypt(body.kashier_api_key) : null,
+      kashier_api_key: body.kashier_api_key || null,
       kashier_test_mode: body.kashier_test_mode ?? true,
-      kashier_webhook_secret: body.kashier_webhook_secret ? encrypt(body.kashier_webhook_secret) : null,
+      kashier_webhook_secret: body.kashier_webhook_secret || null,
       kashier_enabled: body.kashier_enabled ?? false,
     };
 
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
       // Update existing settings
       result = await (supabase
         .from("store_settings")
-        .update(encryptedData) as any)
+        .update(storeData) as any)
         .eq("store_id", storeId);
     } else {
       // Insert new settings
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
         .from("store_settings")
         .insert({
           store_id: storeId,
-          ...encryptedData,
+          ...storeData,
         } as any);
     }
 

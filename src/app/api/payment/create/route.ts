@@ -182,8 +182,18 @@ export async function POST(request: NextRequest) {
           storeId, // Pass store ID for dynamic keys
         }
 
+        // Determine dynamic appUrl from origin/referer for correct redirection
+        const origin = request.headers.get("origin") || "";
+        let appUrl = origin;
+
+        if (!appUrl) {
+          const host = request.headers.get("host") || "";
+          const protocol = host.includes("localhost") ? "http" : "https";
+          appUrl = `${protocol}://${host}`;
+        }
+
         // Call the service to generate payment URL using store-specific config
-        const result = await paymentService.initiateKashierPayment(kashierParams, storeId)
+        const result = await paymentService.initiateKashierPayment(kashierParams, storeId, appUrl)
 
         await auditLogger.logPaymentCreated({
           transactionId: result.transactionId,

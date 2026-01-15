@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { MainNavigation } from "./main-navigation"
 import { MobileNavigation } from "./mobile-navigation"
@@ -19,6 +19,7 @@ export function SiteHeader() {
   const [profile, setProfile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { settings, loadSettings } = useSettingsStore()
+  const lastEventRef = useRef<string>("")
 
   useEffect(() => {
     loadSettings()
@@ -26,48 +27,31 @@ export function SiteHeader() {
 
   useEffect(() => {
     let isMounted = true
-    let lastEvent = ""
 
     // Subscribe to auth state changes (most reliable)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!isMounted) return
       
-      console.log("[Header] Auth state changed:", _event, !!session?.user)
+      console.log("[Header] Auth state changed:", _event, !!session?.user, "lastEvent:", lastEventRef.current)
       
       // Ignore INITIAL_SESSION false after SIGNED_IN (race condition fix)
-      if (_event === "INITIAL_SESSION" && !session?.user && lastEvent === "SIGNED_IN") {
-        console.log("[Header] Ignoring INITIAL_SESSION false after SIGNED_IN")
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEventRef.current === "SIGNED_IN") {
+        console.log("[Header] Ignoring INITIAL_SESSION false after SIGNED_IN, keeping previous user state")
         return
       }
       
-      lastEvent = _event
+      lastEventRef.current = _event
       
       if (session?.user) {
         console.log("[Header] Setting user on auth change:", session.user.id)
         setUser(session.user)
-        
-        // Load profile
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("name, image_url, phone_number")
-            .eq("id", session.user.id)
-            .single()
-          
-          if (!isMounted) return
-          if (profileData) {
-            setProfile(profileData)
-          }
-        } catch (err) {
-          console.error("[Header] Profile load on auth change error:", err)
-        }
+        setIsLoading(false)
       } else {
         console.log("[Header] No user session found")
         setUser(null)
         setProfile(null)
+        setIsLoading(false)
       }
-      
-      setIsLoading(false)
     })
 
     // Also check current session as fallback
@@ -85,22 +69,7 @@ export function SiteHeader() {
         
         if (session?.user && !user) {
           setUser(session.user)
-          
-          // Load profile
-          try {
-            const { data: profileData } = await supabase
-              .from("profiles")
-              .select("name, image_url, phone_number")
-              .eq("id", session.user.id)
-              .single()
-            
-            if (!isMounted) return
-            if (profileData) {
-              setProfile(profileData)
-            }
-          } catch (err) {
-            console.error("[Header] Profile load error:", err)
-          }
+          setIsLoading(false)
         }
       } catch (err) {
         console.error("[Header] Error checking current session:", err)

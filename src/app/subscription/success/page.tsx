@@ -17,7 +17,23 @@ import confetti from "canvas-confetti"
 function SubscriptionSuccessContent() {
   const searchParams = useSearchParams()
   const storeId = searchParams.get("store_id")
-  const orderId = searchParams.get("orderId")
+  // Kashier sends our orderId in merchantOrderId, and their own orderId as orderId
+  // So we need to check merchantOrderId first, then fall back to orderId
+  const merchantOrderId = searchParams.get("merchantOrderId")
+  const kashierOrderId = searchParams.get("orderId") // This might be Kashier's internal ID
+  // Extract our orderId from merchantOrderId if available
+  let orderId = merchantOrderId
+  if (merchantOrderId && merchantOrderId.startsWith("P-")) {
+    // Remove the P- prefix to get original orderId
+    orderId = merchantOrderId.slice(2)
+  } else if (!merchantOrderId && kashierOrderId && kashierOrderId.startsWith("SUB-")) {
+    // Fallback to orderId if it looks like our format
+    orderId = kashierOrderId
+  }
+
+  // Kashier sends paymentStatus in URL redirect
+  const urlPaymentStatus = searchParams.get("paymentStatus")
+  const transactionId = searchParams.get("transactionId")
 
   const [isLoading, setIsLoading] = useState(true)
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed" | "unknown">("unknown")
@@ -25,11 +41,23 @@ function SubscriptionSuccessContent() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    console.log("[SubscriptionSuccess] Page loaded, checking payment status...")
+    console.log("[SubscriptionSuccess] Params:", {
+      storeId,
+      orderId,
+      merchantOrderId,
+      kashierOrderId,
+      urlPaymentStatus,
+      transactionId
+    })
     checkPaymentStatus()
   }, [storeId, orderId])
 
   const checkPaymentStatus = async () => {
+    console.log("[SubscriptionSuccess] Checking payment status...")
+
     if (!storeId || !orderId) {
+      console.error("[SubscriptionSuccess] Missing params:", { storeId, orderId })
       setError("معلومات الدفع غير كاملة")
       setPaymentStatus("unknown")
       setIsLoading(false)
@@ -37,11 +65,46 @@ function SubscriptionSuccessContent() {
     }
 
     try {
-      // استخدام API route لتجاوز RLS
+      // If Kashier says SUCCESS in URL, try to activate subscription directly
+      if (urlPaymentStatus === "SUCCESS") {
+        console.log("[SubscriptionSuccess] paymentStatus=SUCCESS in URL, activating subscription...")
+
+        // Call API to activate subscription
+        const activateResponse = await fetch("/api/payment/subscription/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            store_id: storeId,
+            orderId: orderId,
+            transactionId: transactionId
+          })
+        })
+        const activateResult = await activateResponse.json()
+        console.log("[SubscriptionSuccess] Activate response:", activateResult)
+
+        if (activateResponse.ok && activateResult.success) {
+          setPaymentStatus("success")
+          if (activateResult.store) setStore(activateResult.store)
+          setIsLoading(false)
+          // Trigger confetti
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+          })
+          return
+        }
+        // If activation failed, fall through to regular status check
+        console.log("[SubscriptionSuccess] Direct activation failed, checking status...")
+      }
+
+      // Regular status check via API
+      console.log("[SubscriptionSuccess] Calling status API...")
       const response = await fetch(
         `/api/payment/subscription/status?store_id=${storeId}&orderId=${orderId}`
       )
       const result = await response.json()
+      console.log("[SubscriptionSuccess] Status API response:", result)
 
       if (!response.ok) {
         console.error("Error checking subscription:", result.error)

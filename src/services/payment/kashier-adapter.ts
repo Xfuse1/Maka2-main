@@ -7,7 +7,8 @@ export interface KashierPaymentParams {
   currency?: string;
   customerEmail: string;
   customerName: string;
-  storeId?: string; // NEW: Store ID for multi-tenant support
+  storeId?: string;
+  extraRedirectParams?: Record<string, string>; // NEW
 }
 
 export interface KashierPaymentResult {
@@ -36,41 +37,79 @@ export interface KashierWebhookPayload {
  */
 export function buildKashierPaymentUrl(
   params: KashierPaymentParams,
-  config?: KashierConfig
+  config?: KashierConfig,
+  originalOrderId?: string
 ): KashierPaymentResult {
   // Use provided config or fallback to environment variables
   const kashierConfig = config || getKashierConfigFromEnv();
 
-  const orderId = params.orderId;
+  // CRITICAL: Ensure orderId is under 50 characters for Kashier compatibility
+  let orderId = params.orderId;
+  if (orderId.length > 50) {
+    console.warn(`[KashierAdapter] orderId too long (${orderId.length}), truncating`);
+    orderId = orderId.slice(0, 50);
+  }
+
+  const displayOrderId = originalOrderId || orderId;
   const formattedAmount = Number(params.amount).toFixed(2);
   const currency = (params.currency || "EGP").toUpperCase();
 
-  // Use API KEY for signing
-  const signingKey = kashierConfig.apiKey;
-  if (!signingKey) {
-    throw new Error("No Kashier API key configured");
+  // CRITICAL: Use the EXACT same merchantId for hash and URL
+  const merchantId = String(kashierConfig.merchantId).trim();
+  let signingKey = String(kashierConfig.apiKey).trim();
+
+  // Kashier keys with $ separator: try second part (after $) for signing
+  if (signingKey.includes('$')) {
+    const keyParts = signingKey.split('$');
+    // Try the SECOND part this time (after $)
+    console.log("[KashierAdapter] Key contains $, using SECOND part:", keyParts[1]?.length || 0, "chars");
+    signingKey = keyParts[1] || keyParts[0];
   }
 
-  // Path format for hash generation
-  const path = `/?payment=${kashierConfig.merchantId}.${orderId}.${formattedAmount}.${currency}`;
+  if (!signingKey) {
+    throw new Error("No Kashier API key configured for signing");
+  }
+
+  // HASH: Must match Kashier's expected format exactly
+  // Format: /?payment=MID.ORDER.AMOUNT.CURRENCY
+  const path = `/?payment=${merchantId}.${orderId}.${formattedAmount}.${currency}`;
+
+  console.log("[KashierAdapter] Hash path:", path);
+  console.log("[KashierAdapter] Signing key length:", signingKey.length);
 
   const hash = crypto
     .createHmac("sha256", signingKey)
     .update(path)
     .digest("hex");
 
-  const successUrl = encodeURIComponent(
-    `${kashierConfig.appUrl}/order-success?orderId=${orderId}`
-  );
-  const failureUrl = encodeURIComponent(
-    `${kashierConfig.appUrl}/payment/cancel?orderId=${orderId}`
-  );
+  // Build redirect URLs
+  let successUrlStr = `${kashierConfig.appUrl}/order-success?orderId=${displayOrderId}`;
+  let failureUrlStr = `${kashierConfig.appUrl}/payment/cancel?orderId=${displayOrderId}`;
+
+  if (params.extraRedirectParams) {
+    const query = new URLSearchParams(params.extraRedirectParams).toString();
+    if (query) {
+      const isSub = orderId.startsWith('P-SUB-');
+      const successPath = isSub ? '/subscription/success' : '/order-success';
+      const failurePath = isSub ? '/subscription/cancel' : '/payment/cancel';
+
+      successUrlStr = `${kashierConfig.appUrl}${successPath}?orderId=${displayOrderId}&${query}`;
+      failureUrlStr = `${kashierConfig.appUrl}${failurePath}?orderId=${displayOrderId}&${query}`;
+    }
+  }
+
+  const isSub = orderId.startsWith('P-SUB-');
+  const webhookPath = isSub ? '/api/payment/subscription/webhook' : '/api/payment/webhook';
+
+  const successUrl = encodeURIComponent(successUrlStr);
+  const failureUrl = encodeURIComponent(failureUrlStr);
   const webhookUrl = encodeURIComponent(
-    `${kashierConfig.appUrl}/api/payment/webhook`
+    `${kashierConfig.appUrl}${webhookPath}`
   );
 
+  // BUILD URL: Use the EXACT same merchantId used for hash
   const paymentUrl =
-    `${kashierConfig.baseUrl}/?merchantId=${kashierConfig.merchantId}` +
+    `${kashierConfig.baseUrl}/?merchantId=${merchantId}` +
     `&orderId=${orderId}` +
     `&mode=${kashierConfig.mode}` +
     `&amount=${formattedAmount}` +
@@ -79,7 +118,10 @@ export function buildKashierPaymentUrl(
     `&merchantRedirect=${successUrl}` +
     `&failureRedirect=${failureUrl}` +
     `&serverWebhook=${webhookUrl}` +
-    `&allowedMethods=card,wallet,bank_installments&display=en`;
+    `&display=ar` +
+    `&allowedMethods=card,wallet`;
+
+  console.log("[KashierAdapter] Payment URL generated:", paymentUrl.slice(0, 200) + "...");
 
   return {
     paymentUrl,

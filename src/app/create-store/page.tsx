@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createBrowserClient } from "@supabase/ssr"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -38,35 +38,91 @@ function CreateStoreContent() {
     description: "",
   })
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
-  // Check authentication on mount
+  // Check authentication - first from sessionStorage (after fresh login), then onAuthStateChange
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { user }, error } = await supabase.auth.getUser()
-        
-        if (error || !user) {
-          // User not authenticated, redirect to login with next parameter
-          const nextParam = encodeURIComponent("/create-store")
-          router.push(`/auth?next=${nextParam}`)
-          return
-        }
+    let mounted = true
+    let redirectTimeout: NodeJS.Timeout | null = null
 
-        // User is authenticated
-        setUserEmail(user.email || "")
-        setCheckingAuth(false)
-      } catch (err) {
-        console.error("Auth check error:", err)
-        router.push("/auth")
+    console.log("[CreateStore] Checking authentication...")
+
+    // First, check sessionStorage for user info (stored after fresh login)
+    const checkSessionStorage = () => {
+      try {
+        const stored = sessionStorage.getItem('auth_user_temp')
+        if (stored) {
+          const userData = JSON.parse(stored)
+          // Only use if stored within last 5 minutes
+          if (Date.now() - userData.timestamp < 5 * 60 * 1000) {
+            console.log("[CreateStore] Found user in sessionStorage:", userData.email)
+            setUserEmail(userData.email || "")
+            setCheckingAuth(false)
+            // Clear the temp storage
+            sessionStorage.removeItem('auth_user_temp')
+            return true
+          } else {
+            // Expired, remove it
+            sessionStorage.removeItem('auth_user_temp')
+          }
+        }
+      } catch (e) {
+        console.error("[CreateStore] Error reading sessionStorage:", e)
       }
+      return false
     }
 
-    checkAuth()
-  }, [router, supabase.auth])
+    // If we found user in sessionStorage, we're done
+    if (checkSessionStorage()) {
+      return
+    }
+
+    // Otherwise, subscribe to auth state changes as backup
+    console.log("[CreateStore] No sessionStorage user, setting up auth listener...")
+    const lastEventRef = { current: "" }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+
+      console.log("[CreateStore] Auth state changed:", _event, {
+        hasSession: !!session,
+        userId: session?.user?.id
+      })
+
+      // Ignore INITIAL_SESSION false after SIGNED_IN
+      if (_event === "INITIAL_SESSION" && !session?.user && lastEventRef.current === "SIGNED_IN") {
+        console.log("[CreateStore] Ignoring INITIAL_SESSION false after SIGNED_IN")
+        return
+      }
+
+      lastEventRef.current = _event
+
+      if (session?.user) {
+        console.log("[CreateStore] User authenticated:", session.user.email)
+        if (redirectTimeout) {
+          clearTimeout(redirectTimeout)
+          redirectTimeout = null
+        }
+        setUserEmail(session.user.email || "")
+        setCheckingAuth(false)
+      }
+    })
+
+    // Set a timeout - if no session after 3 seconds, redirect to auth
+    redirectTimeout = setTimeout(() => {
+      if (mounted && checkingAuth) {
+        console.log("[CreateStore] Timeout: No session received, redirecting to auth...")
+        const nextParam = encodeURIComponent("/create-store")
+        router.push(`/auth?next=${nextParam}`)
+      }
+    }, 3000)
+
+    return () => {
+      mounted = false
+      if (redirectTimeout) clearTimeout(redirectTimeout)
+      subscription?.unsubscribe()
+    }
+  }, [router, supabase.auth, checkingAuth])
 
   const isValidSubdomain = (subdomain: string): boolean => {
     const regex = /^[a-z0-9-]+$/
@@ -80,7 +136,7 @@ function CreateStoreContent() {
     }
 
     setCheckingSubdomain(true)
-    
+
     try {
       const { data, error } = await supabase.rpc("is_subdomain_available", {
         subdomain_input: subdomain,
@@ -213,159 +269,159 @@ function CreateStoreContent() {
 
         {/* Store Details Form */}
         <Card className="shadow-xl">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>بيانات المتجر</CardTitle>
-                  <CardDescription>أدخل معلومات متجرك الجديد</CardDescription>
-                </div>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>بيانات المتجر</CardTitle>
+                <CardDescription>أدخل معلومات متجرك الجديد</CardDescription>
               </div>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleFormSubmit} className="space-y-6">
-                {/* اسم المتجر */}
-                <div className="space-y-2">
-                  <Label htmlFor="storeName">
-                    اسم المتجر <span className="text-red-500">*</span>
-                  </Label>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleFormSubmit} className="space-y-6">
+              {/* اسم المتجر */}
+              <div className="space-y-2">
+                <Label htmlFor="storeName">
+                  اسم المتجر <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="storeName"
+                  value={formData.storeName}
+                  onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
+                  placeholder="مثال: متجر الإلكترونيات"
+                  required
+                />
+              </div>
+
+              {/* Subdomain */}
+              <div className="space-y-2">
+                <Label htmlFor="subdomain">
+                  عنوان المتجر (Subdomain) <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex items-center gap-2">
                   <Input
-                    id="storeName"
-                    value={formData.storeName}
-                    onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-                    placeholder="مثال: متجر الإلكترونيات"
+                    id="subdomain"
+                    value={formData.subdomain}
+                    onChange={(e) => handleSubdomainChange(e.target.value)}
+                    placeholder="my-store"
+                    className="flex-1"
                     required
+                    minLength={3}
+                    maxLength={30}
                   />
+                  <span className="text-gray-600 font-medium whitespace-nowrap">
+                    .{process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"}
+                  </span>
                 </div>
 
-                {/* Subdomain */}
-                <div className="space-y-2">
-                  <Label htmlFor="subdomain">
-                    عنوان المتجر (Subdomain) <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="subdomain"
-                      value={formData.subdomain}
-                      onChange={(e) => handleSubdomainChange(e.target.value)}
-                      placeholder="my-store"
-                      className="flex-1"
-                      required
-                      minLength={3}
-                      maxLength={30}
-                    />
-                    <span className="text-gray-600 font-medium whitespace-nowrap">
-                      .{process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "xfuse.online"}
-                    </span>
-                  </div>
-                  
-                  {/* حالة التحقق */}
-                  {checkingSubdomain && (
-                    <p className="text-sm text-blue-600 flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      جاري التحقق...
-                    </p>
-                  )}
-                  {!checkingSubdomain && subdomainAvailable === true && (
-                    <p className="text-sm text-green-600 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      العنوان متاح!
-                    </p>
-                  )}
-                  {!checkingSubdomain && subdomainAvailable === false && (
-                    <p className="text-sm text-red-600 flex items-center gap-2">
-                      <XCircle className="w-4 h-4" />
-                      العنوان محجوز
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500">
-                    استخدم أحرف إنجليزية صغيرة وأرقام وشرطات فقط
+                {/* حالة التحقق */}
+                {checkingSubdomain && (
+                  <p className="text-sm text-blue-600 flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    جاري التحقق...
                   </p>
-                </div>
-
-                {/* البريد الإلكتروني - Read-Only */}
-                <div className="space-y-2">
-                  <Label htmlFor="email">
-                    البريد الإلكتروني (مدير المتجر)
-                  </Label>
-                  <div className="relative">
-                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      type="email"
-                      id="email"
-                      value={userEmail || ""}
-                      readOnly
-                      className="pr-10 bg-gray-100 cursor-not-allowed"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    هذا البريد الإلكتروني مرتبط بحسابك ولا يمكن تغييره هنا
-                  </p>
-                </div>
-
-                {/* رقم الهاتف */}
-                <div className="space-y-2">
-                  <Label htmlFor="phone">رقم الهاتف (اختياري)</Label>
-                  <Input
-                    type="tel"
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+20 123 456 7890"
-                  />
-                </div>
-
-                {/* الوصف */}
-                <div className="space-y-2">
-                  <Label htmlFor="description">وصف المتجر (اختياري)</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="اكتب نبذة عن متجرك..."
-                    rows={3}
-                  />
-                </div>
-
-                {/* رسالة خطأ */}
-                {error && (
-                  <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
-                    <p className="text-red-700">{error}</p>
-                  </div>
                 )}
+                {!checkingSubdomain && subdomainAvailable === true && (
+                  <p className="text-sm text-green-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    العنوان متاح!
+                  </p>
+                )}
+                {!checkingSubdomain && subdomainAvailable === false && (
+                  <p className="text-sm text-red-600 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    العنوان محجوز
+                  </p>
+                )}
+                <p className="text-xs text-gray-500">
+                  استخدم أحرف إنجليزية صغيرة وأرقام وشرطات فقط
+                </p>
+              </div>
 
-                {/* Buttons */}
-                <div className="flex items-center justify-between pt-4">
-                  <Link href="/landing">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                      إلغاء
-                    </Button>
-                  </Link>
-                  <Button
-                    type="submit"
-                    disabled={!subdomainAvailable || checkingSubdomain || isLoading}
-                    className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        جاري الإنشاء...
-                      </>
-                    ) : (
-                      <>
-                        إنشاء المتجر
-                        <ArrowLeft className="w-4 h-4" />
-                      </>
-                    )}
-                  </Button>
+              {/* البريد الإلكتروني - Read-Only */}
+              <div className="space-y-2">
+                <Label htmlFor="email">
+                  البريد الإلكتروني (مدير المتجر)
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="email"
+                    id="email"
+                    value={userEmail || ""}
+                    readOnly
+                    className="pr-10 bg-gray-100 cursor-not-allowed"
+                  />
                 </div>
-              </form>
-            </CardContent>
-          </Card>
+                <p className="text-xs text-gray-500">
+                  هذا البريد الإلكتروني مرتبط بحسابك ولا يمكن تغييره هنا
+                </p>
+              </div>
+
+              {/* رقم الهاتف */}
+              <div className="space-y-2">
+                <Label htmlFor="phone">رقم الهاتف (اختياري)</Label>
+                <Input
+                  type="tel"
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+20 123 456 7890"
+                />
+              </div>
+
+              {/* الوصف */}
+              <div className="space-y-2">
+                <Label htmlFor="description">وصف المتجر (اختياري)</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="اكتب نبذة عن متجرك..."
+                  rows={3}
+                />
+              </div>
+
+              {/* رسالة خطأ */}
+              {error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+                  <p className="text-red-700">{error}</p>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex items-center justify-between pt-4">
+                <Link href="/landing">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    إلغاء
+                  </Button>
+                </Link>
+                <Button
+                  type="submit"
+                  disabled={!subdomainAvailable || checkingSubdomain || isLoading}
+                  className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      جاري الإنشاء...
+                    </>
+                  ) : (
+                    <>
+                      إنشاء المتجر
+                      <ArrowLeft className="w-4 h-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* معلومات إضافية */}
         <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl">

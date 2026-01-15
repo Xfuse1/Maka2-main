@@ -31,7 +31,7 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [uiError, setUiError] = useState<string | null>(null)
 
-  const paymentMethods = [
+  const allPaymentMethods = [
     { id: "cod", name: "الدفع عند الاستلام", description: "ادفع نقداً عند استلام طلبك", icon: Wallet },
     { id: "cashier", name: "الدفع الإلكتروني - كاشير", description: "الدفع الآمن عبر البطاقات الإلكترونية", icon: CreditCard },
   ]
@@ -54,12 +54,38 @@ export default function CheckoutPage() {
   const [zoneQuery, setZoneQuery] = useState<string>("")
   const [showZoneDropdown, setShowZoneDropdown] = useState<boolean>(false)
   const [paymentOffers, setPaymentOffers] = useState<any[]>([])
+  const [kashierEnabled, setKashierEnabled] = useState(false)
 
   const subtotal = useMemo(() => {
     const fromStore = toNum(getTotalPrice(), NaN)
     if (!Number.isNaN(fromStore)) return fromStore
     return items.reduce((sum, it: any) => sum + toNum(it?.product?.price, 0) * toNum(it?.quantity, 0), 0)
   }, [getTotalPrice, items])
+
+  // Fetch payment methods status (kashier enabled)
+  useEffect(() => {
+    const fetchPaymentStatus = async () => {
+      try {
+        const res = await fetch('/api/payment-methods-status')
+        if (!res.ok) return
+        const json = await res.json()
+        setKashierEnabled(json.kashier_enabled ?? false)
+      } catch (e) {
+        console.error('Failed to load payment methods status:', e)
+      }
+    }
+    fetchPaymentStatus()
+  }, [])
+
+  // Filtered payment methods based on settings
+  const paymentMethods = useMemo(() => {
+    return allPaymentMethods.filter(method => {
+      if (method.id === "cashier") {
+        return kashierEnabled
+      }
+      return true
+    })
+  }, [kashierEnabled])
 
   // Fetch active payment offers (via API for store isolation)
   useEffect(() => {
@@ -75,6 +101,13 @@ export default function CheckoutPage() {
     }
     fetchOffers()
   }, [])
+
+  // Reset payment method if cashier is disabled but was selected
+  useEffect(() => {
+    if (!kashierEnabled && formData.paymentMethod === "cashier") {
+      setFormData(prev => ({ ...prev, paymentMethod: "cod" }))
+    }
+  }, [kashierEnabled, formData.paymentMethod])
 
   // Derived state for active offer
   const activeOffer = useMemo(() => {

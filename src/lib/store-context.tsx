@@ -95,9 +95,41 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset Supabase client on mount to ensure fresh store context
+  // Track subdomain changes - only reset client if subdomain actually changes
+  const [lastSubdomain, setLastSubdomain] = useState<string | null>(null)
+
+  // Helper to get current subdomain
+  const getCurrentSubdomain = (): string | null => {
+    if (typeof window === "undefined") return null
+    const hostname = window.location.hostname
+    const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || "makastore.com"
+
+    if (hostname.endsWith(".localhost")) {
+      const subdomain = hostname.replace(".localhost", "")
+      return (subdomain && subdomain !== "www") ? subdomain : null
+    }
+    if (hostname === "localhost" || hostname === "127.0.0.1") return null
+
+    const cleanHost = hostname.replace(/^www\./, "")
+    if (!cleanHost.endsWith(platformDomain)) return null
+
+    const subdomain = cleanHost.replace(`.${platformDomain}`, "")
+    return (!subdomain || subdomain === platformDomain) ? null : subdomain
+  }
+
+  // Only reset Supabase client when subdomain actually changes (for store switching)
   useEffect(() => {
-    resetSupabaseClient()
+    const currentSubdomain = getCurrentSubdomain()
+
+    // Only reset if:
+    // 1. We have a previous subdomain AND
+    // 2. The subdomain has changed to a different value
+    if (lastSubdomain !== null && lastSubdomain !== currentSubdomain) {
+      console.log("[StoreContext] Subdomain changed from", lastSubdomain, "to", currentSubdomain, "- resetting client")
+      resetSupabaseClient()
+    }
+
+    setLastSubdomain(currentSubdomain)
   }, [])
 
   const supabase = getSupabaseBrowserClient()
@@ -153,21 +185,23 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
 
       // إذا لم يكن هناك subdomain، نستخدم المتجر الافتراضي
       if (!subdomain) {
-        // تحميل المتجر الافتراضي (main subdomain)
+        // تحميل المتجر الافتراضي (أول متجر نشط)
         const { data, error: fetchError } = await supabase
           .from("stores")
           .select("*")
-          .eq("subdomain", "main")
           .eq("status", "active")
-          .single()
+          .order("created_at", { ascending: true })
+          .limit(1)
 
-        if (fetchError) {
+        if (fetchError || !data || data.length === 0) {
           console.error("[StoreContext] Error fetching default store:", fetchError)
-          setError("فشل في تحميل بيانات المتجر")
+          setError("لا توجد متاجر متاحة")
+          setIsLoading(false)
           return
         }
 
-        setStore(data)
+        setStore(data[0])
+        setIsLoading(false)
         return
       }
 
@@ -176,11 +210,13 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
         .from("stores")
         .select("*")
         .eq("subdomain", subdomain)
+        .eq("status", "active")
         .single()
 
       if (fetchError) {
         console.error(`[StoreContext] Error fetching store ${subdomain}:`, fetchError)
         setError(`المتجر "${subdomain}" غير موجود`)
+        setIsLoading(false)
         return
       }
 
@@ -189,14 +225,15 @@ export function StoreProvider({ children, initialStoreId }: StoreProviderProps) 
       // التحقق من حالة المتجر
       if (storeData.status !== "active") {
         setError(`المتجر غير نشط. الحالة: ${storeData.status}`)
+        setIsLoading(false)
         return
       }
 
       setStore(storeData)
+      setIsLoading(false)
     } catch (err) {
       console.error("[StoreContext] Unexpected error:", err)
       setError("حدث خطأ غير متوقع")
-    } finally {
       setIsLoading(false)
     }
   }

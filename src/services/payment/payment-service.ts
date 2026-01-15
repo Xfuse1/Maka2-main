@@ -2,16 +2,22 @@
 // Handles payment creation, validation, and status updates
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { 
-  buildKashierPaymentUrl, 
-  verifyKashierWebhookSignature, 
-  KashierPaymentParams, 
+import {
+  buildKashierPaymentUrl,
+  verifyKashierWebhookSignature,
+  KashierPaymentParams,
   KashierPaymentResult,
-  KashierWebhookPayload 
+  KashierWebhookPayload
 } from "./kashier-adapter"
-import { getKashierConfigForStore, type KashierConfig } from "./kashier-config"
+import {
+  getKashierConfigForStore,
+  getKashierSecretLean,
+  getKashierConfigFromEnv,
+  type KashierConfig
+} from "./kashier-config"
 import { auditLogger } from "./audit-logger"
 import { encryptPaymentData, generateSignature, generateSecureToken } from "./encryption"
+import { storeSecretCache } from "./cache"
 
 export interface KashierWebhookResult {
   ok: boolean
@@ -46,11 +52,11 @@ export interface PaymentResult {
 export class PaymentService {
   private supabase = createAdminClient()
 
-  /**
-   * Initiate a new Kashier payment (Clean method)
-   * Now supports multi-tenant with dynamic keys per store
-   */
-  async initiateKashierPayment(params: KashierPaymentParams, storeId?: string): Promise<KashierPaymentResult> {
+  async initiateKashierPayment(
+    params: KashierPaymentParams,
+    storeId?: string,
+    appUrl?: string
+  ): Promise<KashierPaymentResult> {
     // Basic validation
     if (!params.orderId || !params.amount) {
       throw new Error("Missing required payment parameters")
@@ -60,15 +66,26 @@ export class PaymentService {
     let kashierConfig: KashierConfig | undefined;
     if (storeId) {
       try {
-        kashierConfig = await getKashierConfigForStore(storeId);
+        kashierConfig = await getKashierConfigForStore(storeId, appUrl);
       } catch (error) {
         console.error("[PaymentService] Error getting Kashier config for store:", error);
-        // Will fallback to environment variables in buildKashierPaymentUrl
       }
     }
 
-    // Build URL using store-specific config or env fallback
-    const result = buildKashierPaymentUrl(params, kashierConfig);
+    // COMPOSITE KEY STRATEGY: S-[STORE_ID_8]-[ORDER_ID] or P-[ORDER_ID]
+    // Using '-' as separator (matches Main Domain SUB- format)
+    const isSubscription = params.orderId.startsWith('SUB-');
+    const storePrefix = storeId ? storeId.slice(0, 8) : '';
+    const compositeOrderId = isSubscription
+      ? `P-${params.orderId}`
+      : (storeId ? `S-${storePrefix}-${params.orderId}` : params.orderId);
+
+    // Build URL using composite ID for Kashier, but keep original for redirect
+    const result = buildKashierPaymentUrl(
+      { ...params, orderId: compositeOrderId },
+      kashierConfig,
+      params.orderId // Original ID for redirect
+    );
 
     // Save transaction to database
     try {
@@ -107,20 +124,54 @@ export class PaymentService {
   ): Promise<KashierWebhookResult> {
     const supabase = this.supabase as any
 
-    if (!signature || !timestamp) {
-      console.error("[PaymentService] Missing webhook signature headers")
-      await auditLogger.logSecurityEvent({
-        eventType: "kashier_webhook_missing_signature",
-        description: "Webhook missing signature or timestamp header",
-        actor: "kashier_webhook",
-        ipAddress: context?.ipAddress,
-        details: { hasSignature: Boolean(signature), hasTimestamp: Boolean(timestamp) },
-      })
-      return { ok: false, statusCode: 400, message: "Missing signature headers" }
+    // 1. COMPOSITE KEY DECODING & SECRET FETCHING
+    const merchantOrderId = payload?.data?.order_id
+    let apiSecret: string | undefined
+    let realOrderId = merchantOrderId
+    let prefix: string | undefined
+
+    if (merchantOrderId && merchantOrderId.includes('-')) { // Changed from '_' to '-'
+      const parts = merchantOrderId.split('-') // Changed from '_' to '-'
+      prefix = parts[0]
+
+      if (prefix === 'S' && parts.length >= 3) {
+        const storePrefix = parts[1]
+        realOrderId = parts.slice(2).join('-') // Changed from '_' to '-'
+
+        // Find store by prefix if not full UUID
+        // This is safe because we only need the secret for verification
+        // CACHE STRATEGY: Check in-memory LRU cache first
+        // Note: For prefix lookups, we might need a different cache key or just hit DB
+        // But let's assume storeId here might be the prefix
+        apiSecret = storeSecretCache.get(storePrefix) || undefined
+
+        if (!apiSecret) {
+          apiSecret = await getKashierSecretLean(storePrefix) // Updated lean fetch to handle prefix
+          if (apiSecret) {
+            storeSecretCache.set(storePrefix, apiSecret)
+          }
+        }
+      } else if (prefix === 'P') {
+        realOrderId = parts.slice(1).join('-')  // FIX: Use hyphen, not underscore!
+        apiSecret = process.env.KASHIER_API_SECRET || process.env.KASHIER_API_KEY
+      }
     }
 
-    // 1. Verify signature (with timestamp tolerance)
-    const isValid = verifyKashierWebhookSignature(rawBody, signature, timestamp)
+    // Fallback to platform settings if not determined
+    if (!apiSecret) {
+      apiSecret = process.env.KASHIER_API_SECRET || process.env.KASHIER_API_KEY
+    }
+
+    // 2. Verify signature with specific config
+    const isValid = verifyKashierWebhookSignature(rawBody, signature, timestamp, {
+      apiSecret,
+      merchantId: '', // Not needed for signature verification
+      apiKey: '',
+      baseUrl: '',
+      appUrl: '',
+      mode: 'live'
+    })
+
     if (!isValid) {
       console.error("[PaymentService] Invalid webhook signature")
       await auditLogger.logSecurityEvent({
@@ -128,7 +179,7 @@ export class PaymentService {
         description: "Rejected Kashier webhook due to invalid signature",
         actor: "kashier_webhook",
         ipAddress: context?.ipAddress,
-        details: { signature, timestamp },
+        details: { signature, timestamp, merchantOrderId },
       })
       return { ok: false, statusCode: 401, message: "Invalid signature" }
     }
@@ -148,7 +199,7 @@ export class PaymentService {
     }
 
     const transactionId = payload?.data?.transaction_id
-    const orderId = payload?.data?.order_id
+    const orderId = realOrderId // Use decoded original ID
     const payloadAmount = Number(payload?.data?.amount ?? NaN)
     const payloadCurrency = String(payload?.data?.currency || "").toUpperCase()
 
@@ -158,13 +209,18 @@ export class PaymentService {
         description: "Webhook payload missing order_id",
         actor: "kashier_webhook",
         ipAddress: context?.ipAddress,
-        details: { transactionId },
+        details: { transactionId, merchantOrderId },
       })
       return { ok: false, statusCode: 400, message: "Missing order_id" }
     }
 
     try {
-      // Validate order and transaction details
+      // 2. DISPATCH PROCESSING BASED ON PREFIX
+      if (prefix === 'P') {
+        return await this.processSubscriptionActivation(payload, realOrderId, context)
+      }
+
+      // Standard Order Processing
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .select("id, order_number, total, currency, payment_status, payment_method")
@@ -334,7 +390,7 @@ export class PaymentService {
             status: "completed",
             completed_at: nowIso,
           } as any)
-          
+
           await supabase
             .from("payment_transactions")
             .update({
@@ -527,6 +583,84 @@ export class PaymentService {
         error: error?.message || "Bank transfer payment failed",
       }
     }
+  }
+
+  /**
+   * Specifically process platform-level subscription payments
+   */
+  async processSubscriptionActivation(
+    payload: KashierWebhookPayload,
+    originalOrderId: string,
+    context?: { ipAddress?: string; userAgent?: string }
+  ): Promise<KashierWebhookResult> {
+    const supabase = this.supabase as any
+    const eventType = payload.event_type
+    const status = payload.data?.status
+    const transactionId = payload.data?.transaction_id
+    const amount = Number(payload.data?.amount)
+
+    const isSuccess = eventType === "payment.success" || status === "success" || status === "CAPTURED"
+    const isFailed = eventType === "payment.failed" || status === "failed"
+
+    if (isSuccess) {
+      // Find subscription
+      const { data: subscription, error: subError } = await supabase
+        .from("subscriptions")
+        .select("*, plan:subscription_plans(duration_days, price, name_en)")
+        .eq("payment_reference", originalOrderId)
+        .single()
+
+      if (subError || !subscription) {
+        console.error("[PaymentService] Subscription not found:", originalOrderId)
+        return { ok: false, statusCode: 404, message: "Subscription not found" }
+      }
+
+      const now = new Date()
+      const durationDays = subscription.plan?.duration_days || 30
+      const endDate = new Date(now)
+      endDate.setDate(endDate.getDate() + durationDays)
+
+      // 1. Update subscription status
+      await supabase
+        .from("subscriptions")
+        .update({
+          status: "active",
+          start_date: now.toISOString(),
+          end_date: endDate.toISOString(),
+          payment_method: "kashier",
+          amount_paid: amount || subscription.plan?.price || 0,
+          updated_at: now.toISOString(),
+        })
+        .eq("id", subscription.id)
+
+      // 2. Update store status
+      await supabase
+        .from("stores")
+        .update({
+          status: "active",
+          subscription_status: "active",
+          subscription_plan: subscription.plan?.name_en || "pro",
+          current_subscription_id: subscription.id,
+          updated_at: now.toISOString(),
+        })
+        .eq("id", subscription.store_id)
+
+      return { ok: true, statusCode: 200, message: "Subscription activated" }
+    }
+
+    if (isFailed) {
+      await supabase
+        .from("subscriptions")
+        .update({
+          status: "failed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("payment_reference", originalOrderId)
+
+      return { ok: true, statusCode: 200, message: "Subscription failure recorded" }
+    }
+
+    return { ok: true, statusCode: 200, message: "Event ignored" }
   }
 
   /**
